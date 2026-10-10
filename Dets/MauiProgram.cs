@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Dets.Services;
 
 namespace Dets
 {
@@ -15,9 +16,10 @@ namespace Dets
                 });
 
             builder.Services.AddMauiBlazorWebView();
+            builder.Services.AddSingleton<ISavingService, SaveOnDevice>();
 
 #if DEBUG
-    		builder.Services.AddBlazorWebViewDeveloperTools();
+            builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();
 #endif
 
