@@ -1,0 +1,16 @@
+﻿@page "/gym"
+@using Dets.Models
+@using Dets.Services
+
+@*TODO: fai grafica*@
+
+@code {
+    [Inject] ISavingService SavingService { get; set; }
+
+    GymPlan gymPlan { get; set; } = default!;
+
+    private async Task OnInitializeAsync()
+    {
+        gymPlan = await SavingService.LoadAsync<GymPlan>("gymPlan") ?? new GymPlan();
+    }
+}

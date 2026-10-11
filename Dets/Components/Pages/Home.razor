@@ -2,7 +2,7 @@
 @using Dets.Services
 @inject ISavingService SavingService
 
-<div class="Root" style="background: black"
+<div class="Root"
      @onpointerdown="OnPointerDown"
      @onpointerup="OnPointerUp"
      @onpointercancel="OnPointerCancel">
@@ -63,6 +63,10 @@
         </div>
     </div>
 </div>
+<footer>
+    @*TODO: aggiungi css e digli dove trovare il popup (non so fare)*@
+    <button onclick="gymPopup.showModal()">Palestra</button>
+</footer>
 
 @if (goalToDelete is not null)
 {
@@ -78,6 +82,8 @@
         </div>
     </div>
 }
+
+<GymPopUp />
 
 @if (GoalPopUpVisible)
 {
@@ -275,6 +281,7 @@
 
 <style>
     html, body {
+        background-color: black;
         margin: 0;
         padding: 0;
         overflow-x: hidden;
@@ -555,5 +562,12 @@
 
     .PopupBtn.danger {
         background: #dc2626;
+    }
+
+    footer {
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        background: black;
     }
 </style>
