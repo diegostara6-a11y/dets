@@ -2,9 +2,32 @@
 @using Dets.Models
 @using Dets.Services
 
-@*TODO: fai grafica*@
+<select @bind="selectedDay">
+    @foreach (var d in Enum.GetValues<DayOfWeek>())
+    {
+        <option value="@d">@d</option>
+    }
+</select>
+
+<input placeholder="Esercizio" @bind="exName" />
+<input type="number" placeholder="Serie" @bind="exSets" />
+<input type="number" placeholder="Rep min" @bind="exMin" />
+<input type="number" placeholder="Rep max" @bind="exMax" />
+<input type="number" placeholder="Pausa (secondi)" @bind="exBreakSeconds" />
+<input placeholder="Tipo (es. petto)" @bind="exType" />
+
+<button @onclick="AddExercise">Aggiungi</button>
+
+
 
 @code {
+    private string exName = "";
+    private int exSets = 3;
+    private int exMin = 8;
+    private int exMax = 12;
+    private int exBreakSeconds = 90;
+    private string exType = "";
+
     [Inject] ISavingService SavingService { get; set; }
 
     GymPlan gymPlan { get; set; } = default!;
@@ -13,4 +36,53 @@
     {
         gymPlan = await SavingService.LoadAsync<GymPlan>("gymPlan") ?? new GymPlan();
     }
+    private GymPlan plan = new();
+    private DayOfWeek selectedDay = DayOfWeek.Monday;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var saved = await SavingService.LoadAsync<GymPlan>("gymplan");
+        if (saved is not null) plan = saved;
+    }
+
+    private async Task AddExercise()
+    {
+        if (string.IsNullOrWhiteSpace(exName)) return;
+
+        plan.AddExercise(selectedDay, new GymExercise
+        {
+            Exercise = exName,
+            Sets = exSets,
+            MinReps = exMin,
+            MaxReps = exMax,
+            Break = TimeSpan.FromSeconds(exBreakSeconds),
+            Type = exType
+        });
+
+        await SavingService.SaveAsync("gymplan", plan);
+
+        exName = "";   // svuota il form
+    }
 }
+
+
+<style>
+    .ActionButton {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-height: 120px;
+    padding: 14px;
+    border: none;
+    border-radius: 18px;
+    color: white;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    background: #55499C
+    }
+</style>
