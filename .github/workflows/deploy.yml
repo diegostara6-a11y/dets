@@ -24,7 +24,7 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Publish
-        run: dotnet publish -c Release -o release
+        run: dotnet publish DetsLife/DetsLife.csproj -c Release -o release
 
       - name: Fix base href
         run: sed -i 's|<base href="/" />|<base href="/dets/" />|g' release/wwwroot/index.html
