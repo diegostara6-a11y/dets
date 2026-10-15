@@ -1,0 +1,259 @@
+﻿@page "/calendar"
+@using System.Globalization
+@using Dets.Models
+@using Dets.Services
+@inject HistoryService History
+
+<h3 class="cal-title">Calendario</h3>
+
+@if (stats is null)
+{
+    <p>Caricamento...</p>
+}
+else
+{
+    <div class="cal">
+        <div class="cal-head">
+            <button class="cal-nav" @onclick="PrevMonth" aria-label="Mese precedente">‹</button>
+            <strong>@MonthTitle()</strong>
+            <button class="cal-nav" @onclick="NextMonth" aria-label="Mese successivo">›</button>
+        </div>
+
+        <div class="cal-grid cal-week">
+            @foreach (var w in WeekDays)
+            {
+                <span>@w</span>
+            }
+        </div>
+
+        <div class="cal-grid">
+            @foreach (var day in DaysOfGrid())
+            {
+                if (day is null)
+                {
+                    <span class="cal-empty"></span>
+                }
+                else
+                {
+                    var d = day.Value;
+                    <button class="cal-day @DayClass(d)" @onclick="() => selected = d">
+                        <span class="cal-num">@d.Day</span>
+                        @if (totals.TryGetValue(d, out var t))
+                        {
+                            <span class="cal-dot @(t >= 0 ? "up" : "down")"></span>
+                        }
+                    </button>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="cal-detail">
+        <h4>@selected.ToString("dddd d MMMM", it)</h4>
+        @{
+            var items = stats.Where(s => s.Day == selected).OrderByDescending(s => Math.Abs(s.Points)).ToList();
+        }
+        @if (items.Count == 0)
+        {
+            <p class="cal-none">Nessun evento.</p>
+        }
+        else
+        {
+            <ul class="cal-list">
+                @foreach (var s in items)
+                {
+                    <li>
+                        <span>@s.Name @(s.Count > 1 ? $"×{s.Count}" : "")</span>
+                        <strong class="@(s.Points >= 0 ? "pos" : "neg")">@(s.Points > 0 ? "+" : "")@s.Points</strong>
+                    </li>
+                }
+            </ul>
+            <p class="cal-total">Totale giorno: @items.Sum(x => x.Points)</p>
+        }
+    </div>
+}
+
+@code {
+    private static readonly CultureInfo it = new("it-IT");
+    private static readonly string[] WeekDays = { "L", "M", "M", "G", "V", "S", "D" };
+
+    private List<DayStat>? stats;
+    private Dictionary<DateTime, int> totals = new();
+    private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime selected = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        stats = await History.GetDailyAsync();
+        totals = stats.GroupBy(s => s.Day.Date).ToDictionary(g => g.Key, g => g.Sum(s => s.Points));
+    }
+
+    private void PrevMonth() => month = month.AddMonths(-1);
+    private void NextMonth() => month = month.AddMonths(1);
+
+    private string MonthTitle()
+    {
+        var s = month.ToString("MMMM yyyy", it);
+        return char.ToUpper(s[0]) + s.Substring(1);
+    }
+
+    private List<DateTime?> DaysOfGrid()
+    {
+        var list = new List<DateTime?>();
+        int offset = ((int)month.DayOfWeek + 6) % 7;   // lunedì = 0
+        for (int i = 0; i < offset; i++) list.Add(null);
+        int count = DateTime.DaysInMonth(month.Year, month.Month);
+        for (int d = 1; d <= count; d++) list.Add(new DateTime(month.Year, month.Month, d));
+        return list;
+    }
+
+    private string DayClass(DateTime d)
+    {
+        string c = "";
+        if (d == DateTime.Today) c += " today";
+        if (d == selected.Date) c += " sel";
+        return c;
+    }
+}
+
+<style>
+    html, body {
+        background-color: black;
+        color: white;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+    }
+
+    .cal-title {
+        padding: 12px 16px 0;
+    }
+
+    .cal {
+        padding: 8px 12px;
+    }
+
+    .cal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        font-size: 1.15rem;
+    }
+
+    .cal-nav {
+        background: transparent;
+        border: none;
+        color: #a58bff;
+        font-size: 1.8rem;
+        padding: 0 12px;
+    }
+
+    .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+    }
+
+    .cal-week span {
+        text-align: center;
+        font-size: 0.75rem;
+        opacity: 0.6;
+        padding-bottom: 4px;
+    }
+
+    .cal-empty {
+        height: 46px;
+    }
+
+    .cal-day {
+        height: 46px;
+        background: transparent;
+        border: none;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        border-radius: 50%;
+    }
+
+    .cal-num {
+        width: 30px;
+        height: 30px;
+        line-height: 30px;
+        border-radius: 50%;
+        font-size: 1rem;
+    }
+
+    .cal-day.today .cal-num {
+        background: #ff3b30;
+    }
+
+    .cal-day.sel:not(.today) .cal-num {
+        background: rgba(255, 255, 255, 0.22);
+    }
+
+    .cal-day.sel.today .cal-num {
+        box-shadow: 0 0 0 2px white;
+    }
+
+    .cal-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+    }
+
+        .cal-dot.up {
+            background: #5fd68e;
+        }
+
+        .cal-dot.down {
+            background: #ff6b6b;
+        }
+
+    .cal-detail {
+        margin: 12px;
+        padding: 14px;
+        background: #1b1b24;
+        border-radius: 16px;
+    }
+
+        .cal-detail h4 {
+            margin: 0 0 8px;
+            text-transform: capitalize;
+        }
+
+    .cal-none {
+        opacity: 0.6;
+        margin: 0;
+    }
+
+    .cal-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+        .cal-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+        }
+
+        .cal-list .pos {
+            color: #5fd68e;
+        }
+
+        .cal-list .neg {
+            color: #ff8a8a;
+        }
+
+    .cal-total {
+        margin: 10px 0 0;
+        opacity: 0.8;
+        text-align: right;
+    }
+</style>
