@@ -1,0 +1,347 @@
+﻿@page "/timeline"
+@using Microsoft.AspNetCore.Components.Web
+@using Dets.Models
+@using Dets.Services
+@inject HistoryService History
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<header class="header" @onclick='() => Nav.NavigateTo("")'>
+    <h2>Punteggio Vita</h2>
+</header>
+
+@if (entries is null || stats is null)
+{
+    <p>Caricamento...</p>
+}
+else if (stats.Count == 0)
+{
+    <p>Nessun evento ancora.</p>
+}
+else
+{
+    var pts = Series();
+    double minV = Math.Min(0, pts.Min(p => p.Value));
+    double maxV = Math.Max(1, pts.Max(p => p.Value));
+    double range = maxV - minV;
+
+    const double W = 360, H = 220;
+    const double L = 40, R = 14, T = 14, B = 34;
+    double pw = W - L - R, ph = H - T - B;
+
+    double X(int i) => pts.Count == 1 ? L + pw / 2 : L + pw * i / (pts.Count - 1);
+    double Y(double v) => T + ph - (v - minV) / range * ph;
+    string F(double d) => d.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    string line = string.Join(" ", pts.Select((p, i) => $"{F(X(i))},{F(Y(p.Value))}"));
+    string area = $"{F(X(0))},{F(Y(minV))} " + line + $" {F(X(pts.Count - 1))},{F(Y(minV))}";
+    int step = Math.Max(1, (int)Math.Ceiling(pts.Count / 6.0));
+
+    <div class="chart-card">
+        <svg viewBox="0 0 @F(W) @F(H)" class="line-chart" preserveAspectRatio="xMidYMid meet">
+            <defs>
+                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#7c5cff" stop-opacity="0.45" />
+                    <stop offset="100%" stop-color="#7c5cff" stop-opacity="0" />
+                </linearGradient>
+            </defs>
+
+            @* griglia orizzontale + etichette asse Y *@
+            @for (int g = 0; g <= 4; g++)
+            {
+                double v = minV + range * g / 4;
+                <line x1="@F(L)" x2="@F(W - R)" y1="@F(Y(v))" y2="@F(Y(v))" class="grid" />
+                @Label(L - 6, Y(v) + 4, "ylabel", "end", Math.Round(v).ToString())
+            }
+
+            @if (minV < 0)
+            {
+                <line x1="@F(L)" x2="@F(W - R)" y1="@F(Y(0))" y2="@F(Y(0))" class="zero" />
+            }
+
+            @if (pts.Count > 1)
+            {
+                <polygon points="@area" fill="url(#areaGrad)" />
+                <polyline points="@line" class="path" />
+            }
+
+            @for (int i = 0; i < pts.Count; i++)
+            {
+                <circle cx="@F(X(i))" cy="@F(Y(pts[i].Value))" r="4" class="dot">
+                    <title>@pts[i].Day.ToString("dd/MM/yyyy"): @pts[i].Value punti</title>
+                </circle>
+
+                @if (i % step == 0 || i == pts.Count - 1)
+                {
+                    @Label(X(i), H - 10, "xlabel", "middle", pts[i].Day.ToString("dd/MM"))
+                }
+            }
+        </svg>
+    </div>
+
+    var totals = ActionTotals();
+    var topPos = totals.Where(x => x.Points > 0).OrderByDescending(x => x.Count).FirstOrDefault();
+    var topNeg = totals.Where(x => x.Points < 0).OrderByDescending(x => x.Count).FirstOrDefault();
+
+    <div class="top-row">
+        <div class="top-card pos-card">
+            @if (topPos.Count > 0)
+            {
+                <strong>@topPos.Name</strong>
+                <span>×@topPos.Count</span>
+            }
+            else
+            {
+                <strong>-</strong>
+            }
+        </div>
+
+        <div class="top-card neg-card">
+            @if (topNeg.Count > 0)
+            {
+                <strong>@topNeg.Name</strong>
+                <span>×@topNeg.Count</span>
+            }
+            else
+            {
+                <strong>-</strong>
+            }
+        </div>
+    </div>
+
+    <ul class="history-list">
+        @foreach (var e in entries.OrderByDescending(x => x.Date))
+        {
+            <li>
+                <span>@e.Date.ToString("dd/MM HH:mm") · @e.Name</span>
+                <span class="li-right">
+                    <strong class="@(e.Points >= 0 ? "pos" : "neg")">@(e.Points > 0 ? "+" : "")@e.Points</strong>
+                    <button class="del-btn" aria-label="Elimina" @onclick="() => DeleteEntry(e)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 1 0" />
+                            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
+                        </svg>
+                    </button>
+                </span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<HistoryEntry>? entries;
+    private List<DayStat>? stats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        entries = await History.GetRecentAsync();
+        stats = await History.GetDailyAsync();
+    }
+
+    // Andamento cumulativo su tutta la storia, mostrando gli ultimi 30 giorni
+    private List<(DateTime Day, int Value)> Series()
+    {
+        var daily = stats!
+            .GroupBy(s => s.Day)
+            .OrderBy(g => g.Key)
+            .Select(g => (Day: g.Key, Sum: g.Sum(s => s.Points)))
+            .ToList();
+
+        var result = new List<(DateTime Day, int Value)>();
+        int running = 0;
+        foreach (var d in daily)
+        {
+            running += d.Sum;
+            result.Add((d.Day, running));
+        }
+        return result.TakeLast(30).ToList();
+    }
+
+    // Le 6 azioni che pesano di più sui punti
+    private List<(string Name, int Count, int Points)> ActionTotals()
+    {
+        return stats!
+            .GroupBy(s => s.Name)
+            .Select(g => (Name: g.Key, Count: g.Sum(s => s.Count), Points: g.Sum(s => s.Points)))
+            .ToList();
+    }
+
+    private RenderFragment Label(double x, double y, string cls, string anchor, string content) => builder =>
+    {
+        builder.OpenElement(0, "text");
+        builder.AddAttribute(1, "x", x.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        builder.AddAttribute(2, "y", y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        builder.AddAttribute(3, "class", cls);
+        builder.AddAttribute(4, "text-anchor", anchor);
+        builder.AddContent(5, content);
+        builder.CloseElement();
+    };
+
+    private async Task DeleteEntry(HistoryEntry e)
+    {
+        string sign = e.Points > 0 ? "+" : "";
+        bool ok = await JS.InvokeAsync<bool>("confirm",
+            $"Eliminare \"{e.Name}\" ({sign}{e.Points})? I punti verranno tolti dal totale.");
+        if (!ok) return;
+
+        await History.RemoveAsync(e.Id);
+        entries = await History.GetRecentAsync();
+        stats = await History.GetDailyAsync();
+    }
+}
+
+<style>
+    html, body {
+        background-color: black;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        color: white;
+    }
+
+    .li-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .del-btn {
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.55);
+        padding: 4px;
+        cursor: pointer;
+    }
+
+        .del-btn:hover {
+            color: #ff8a8a;
+        }
+
+    .chart-card {
+        background: linear-gradient(160deg, #1f1b3a, #2d2566);
+        border-radius: 16px;
+        padding: 12px 8px 4px;
+        margin: 12px 0 16px;
+        box-shadow: 0 6px 18px rgba(81, 43, 212, 0.35);
+    }
+
+    .line-chart {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+
+        .line-chart .grid {
+            stroke: rgba(255, 255, 255, 0.12);
+            stroke-width: 1;
+        }
+
+        .line-chart .zero {
+            stroke: rgba(255, 255, 255, 0.4);
+            stroke-width: 1;
+            stroke-dasharray: 4 3;
+        }
+
+        .line-chart .path {
+            fill: none;
+            stroke: #a58bff;
+            stroke-width: 2.5;
+            stroke-linejoin: round;
+            stroke-linecap: round;
+        }
+
+        .line-chart .dot {
+            fill: #fff;
+            stroke: #7c5cff;
+            stroke-width: 2;
+        }
+
+        .line-chart .xlabel, .line-chart .ylabel {
+            fill: rgba(255, 255, 255, 0.75);
+            font-size: 10px;
+        }
+
+    .top-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 0 0 16px;
+    }
+
+    .top-card {
+        border-radius: 16px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        background: #1b1b24;
+    }
+
+        .top-card small {
+            opacity: 0.7;
+            font-size: 0.75rem;
+        }
+
+        .top-card strong {
+            font-size: 1.1rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .top-card span {
+            font-size: 0.85rem;
+            opacity: 0.85;
+        }
+
+    .pos-card {
+        border: 1px solid #2e9e5b;
+        box-shadow: 0 4px 14px rgba(46, 158, 91, 0.25);
+    }
+
+        .pos-card strong {
+            color: #5fd68e;
+        }
+
+    .neg-card {
+        border: 1px solid #d14343;
+        box-shadow: 0 4px 14px rgba(209, 67, 67, 0.25);
+    }
+
+        .neg-card strong {
+            color: #ff8a8a;
+        }
+
+    .history-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+        .history-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 4px;
+            border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+        }
+
+        .history-list .pos {
+            color: #2e9e5b;
+        }
+
+        .history-list .neg {
+            color: #d14343;
+        }
+
+    .header {
+        position: sticky; /* la barra nera resta fissa in alto */
+        top: 0;
+        z-index: 10;
+        margin: 0;
+        padding: 12px 0 8px;
+        text-align: center;
+        color: white;
+        background: #0b0b14;
+        letter-spacing: 1px;
+    }
+</style>

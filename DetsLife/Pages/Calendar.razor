@@ -3,8 +3,12 @@
 @using Dets.Models
 @using Dets.Services
 @inject HistoryService History
+@inject ISavingService SavingService
+@inject NavigationManager Nav
 
-<h3 class="cal-title">Calendario</h3>
+<header class="header" @onclick='() => Nav.NavigateTo("")'>
+    <h2>Punteggio Vita</h2>
+</header>
 
 @if (stats is null)
 {
@@ -42,11 +46,19 @@ else
                         {
                             <span class="cal-dot @(t >= 0 ? "up" : "down")"></span>
                         }
+                        else if (events.Any(e => e.Date.Date == d.Date))
+                        {
+                            <span class="cal-dot up"></span>
+                        }
                     </button>
                 }
             }
         </div>
     </div>
+
+    <button class="EventBtn" @onclick="ShowPopUp">
+        <h2>Aggiungi Evento</h2>
+    </button>
 
     <div class="cal-detail">
         <h4>@selected.ToString("dddd d MMMM", it)</h4>
@@ -73,19 +85,129 @@ else
     </div>
 }
 
+
+@{
+    var dayEvents = events
+        .Where(e => e.Date.Date == selected.Date)
+        .ToList();
+}
+
+<h4>Eventi personali</h4>
+
+@if (dayEvents.Count == 0)
+{
+    <p class="cal-none">Nessun evento personale.</p>
+}
+else
+{
+    <ul class="cal-list">
+        @foreach (var ev in dayEvents)
+        {
+            <li @key="ev.Id">
+                <div>
+                    <strong>@ev.Name</strong>
+
+                    @if (!string.IsNullOrWhiteSpace(ev.Description))
+                    {
+                        <p>@ev.Description</p>
+                    }
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+@if (showPopUp)
+{
+    <div class="PopupBackdrop" @onclick="ClosePopup">
+        <div class="PopupBox" @onclick:stopPropagation="true">
+            <h3>Aggiungi Evento</h3>
+            <h5>@selected.ToString("dddd d MMMM yyyy", it)</h5>
+
+            <label for="eventName">Nome evento</label>
+            <input id="eventName"
+                   class="PopupInput"
+                   type="text"
+                   @bind="eventName"
+                   placeholder="Es. Verifica di matematica" />
+
+            <label for="eventDescription">Descrizione</label>
+            <textarea id="eventDescription"
+                      class="PopupInput"
+                      @bind="eventDescription"
+                      placeholder="Descrizione dell'evento"></textarea>
+
+            <div class="PopupButtons">
+                <button class="PopupBtn cancel" @onclick="ClosePopup">
+                    Annulla
+                </button>
+                <button class="PopupBtn ok" @onclick="SaveEvent">
+                    Salva
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private static readonly CultureInfo it = new("it-IT");
     private static readonly string[] WeekDays = { "L", "M", "M", "G", "V", "S", "D" };
+    private bool showPopUp = false;
+    private List<Dets.Models.Event> events = new();
 
     private List<DayStat>? stats;
     private Dictionary<DateTime, int> totals = new();
     private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private DateTime selected = DateTime.Today;
 
+    private string eventName = "";
+    private string eventDescription = "";
+
+    private void ShowPopUp()
+    {
+        eventName = "";
+        eventDescription = "";
+        showPopUp = true;
+    }
+
+    private void ClosePopup()
+    {
+        showPopUp = false;
+    }
+
+    private async Task SaveEvent()
+    {
+        if (string.IsNullOrWhiteSpace(eventName))
+            return;
+
+        var newEvent = new Dets.Models.Event
+        {
+            Name = eventName.Trim(),
+            Description = eventDescription.Trim(),
+            Day = selected.Day,
+            Month = selected.Month,
+            Year = selected.Year
+        };
+
+        events.Add(newEvent);
+
+        await SavingService.SaveAsync("events", events);
+
+        ClosePopup();
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        // Carica lo storico dei punti
         stats = await History.GetDailyAsync();
-        totals = stats.GroupBy(s => s.Day.Date).ToDictionary(g => g.Key, g => g.Sum(s => s.Points));
+
+        totals = stats
+            .GroupBy(s => s.Day.Date)
+            .ToDictionary(g => g.Key, g => g.Sum(s => s.Points));
+
+        // Carica gli eventi personali salvati
+        events = await SavingService.LoadAsync<List<Dets.Models.Event>>("events")
+                 ?? new List<Dets.Models.Event>();
     }
 
     private void PrevMonth() => month = month.AddMonths(-1);
@@ -118,142 +240,352 @@ else
 
 <style>
     html, body {
-        background-color: black;
-        color: white;
+    background-color: black;
+    color: white;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+.cal-title {
+    padding: 12px 16px 0;
+    letter-spacing: 1px;
+}
+
+.cal {
+    padding: 8px 12px;
+}
+
+.cal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 1.15rem;
+}
+
+.cal-head strong {
+    text-transform: capitalize;
+}
+
+.cal-nav {
+    background: transparent;
+    border: none;
+    color: #a58bff;
+    font-size: 1.8rem;
+    padding: 0 12px;
+    cursor: pointer;
+    border-radius: 10px;
+}
+
+.cal-nav:active {
+    background: rgba(165, 139, 255, 0.15);
+}
+
+.cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.cal-week span {
+    text-align: center;
+    font-size: 0.75rem;
+    opacity: 0.6;
+    padding-bottom: 4px;
+}
+
+.cal-empty {
+    height: 46px;
+}
+
+.cal-day {
+    height: 46px;
+    background: transparent;
+    border: none;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border-radius: 50%;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.cal-day:active {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.cal-num {
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    border-radius: 50%;
+    font-size: 1rem;
+}
+
+.cal-day.today .cal-num {
+    background: #ff3b30;
+}
+
+.cal-day.sel:not(.today) .cal-num {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.cal-day.sel.today .cal-num {
+    box-shadow: 0 0 0 2px white;
+}
+
+.cal-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.cal-dot.up {
+    background: #5fd68e;
+}
+
+.cal-dot.down {
+    background: #ff6b6b;
+}
+
+/* Dettagli del giorno */
+.cal-detail {
+    margin: 12px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #1b1b24;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 18px;
+    color: white;
+}
+
+.cal-detail h4 {
+    margin: 0 0 12px;
+    text-transform: capitalize;
+}
+
+.cal-none {
+    opacity: 0.6;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* Storico dei punti */
+.cal-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.cal-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+}
+
+.cal-list li:last-child {
+    border-bottom: none;
+}
+
+.cal-list .pos {
+    color: #5fd68e;
+}
+
+.cal-list .neg {
+    color: #ff8a8a;
+}
+
+.cal-total {
+    margin: 12px 0 0;
+    opacity: 0.85;
+    text-align: right;
+    font-weight: 700;
+}
+
+/* Pulsante Aggiungi Evento */
+.EventBtn {
+    display: block;
+    background: linear-gradient(135deg, #292938, #1b1b24);
+    color: white;
+    border: 1px solid rgba(165, 139, 255, 0.3);
+    border-radius: 16px;
+    padding: 12px 16px;
+    margin: 14px 12px;
+    width: calc(100% - 24px);
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    transition: transform 0.15s ease, filter 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.EventBtn h2 {
+    font-size: 1rem;
+    margin: 0;
+    font-weight: 700;
+}
+
+.EventBtn:active {
+    transform: scale(0.98);
+    filter: brightness(1.2);
+}
+
+/* Eventi personali */
+.cal-event {
+    background: #242431;
+    border: 1px solid rgba(165, 139, 255, 0.15);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.cal-event:last-child {
+    margin-bottom: 0;
+}
+
+.cal-event-name {
+    font-weight: 700;
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+}
+
+.cal-event-description {
+    margin: 6px 0 0;
+    font-size: 0.88rem;
+    line-height: 1.4;
+    color: #c4c4d4;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* Popup */
+.PopupBackdrop {
+    position: fixed;
+    inset: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: popupFade 0.18s ease-out;
+}
+
+.PopupBox {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 380px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 22px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    background: #1f2937;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.45);
+}
+
+.PopupBox h3 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.PopupBox h5 {
+    margin: 0;
+    color: #c4c4d4;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.PopupBox label {
+    margin-bottom: -8px;
+    color: #d1d5db;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.PopupInput {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid #414152;
+    border-radius: 10px;
+    outline: none;
+    background: #11111b;
+    color: white;
+    font-family: inherit;
+    font-size: 1rem;
+    color-scheme: dark;
+}
+
+.PopupInput::placeholder {
+    color: #858596;
+}
+
+.PopupInput:focus {
+    border-color: #a58bff;
+    box-shadow: 0 0 0 2px rgba(165, 139, 255, 0.15);
+}
+
+.PopupBox textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.PopupButtons {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.PopupBtn {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 10px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: white;
+    cursor: pointer;
+    transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.PopupBtn:active {
+    transform: scale(0.97);
+    filter: brightness(0.9);
+}
+
+.PopupBtn.cancel {
+    background: #4b5563;
+}
+
+.PopupBtn.ok {
+    background: linear-gradient(135deg, #22c55e, #15803d);
+}
+
+    .header {
+        position: sticky; /* la barra nera resta fissa in alto */
+        top: 0;
+        z-index: 10;
         margin: 0;
-        padding: 0;
-        overflow-x: hidden;
-    }
-
-    .cal-title {
-        padding: 12px 16px 0;
-    }
-
-    .cal {
-        padding: 8px 12px;
-    }
-
-    .cal-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-        font-size: 1.15rem;
-    }
-
-    .cal-nav {
-        background: transparent;
-        border: none;
-        color: #a58bff;
-        font-size: 1.8rem;
-        padding: 0 12px;
-    }
-
-    .cal-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 4px;
-    }
-
-    .cal-week span {
+        padding: 12px 0 8px;
         text-align: center;
-        font-size: 0.75rem;
-        opacity: 0.6;
-        padding-bottom: 4px;
-    }
-
-    .cal-empty {
-        height: 46px;
-    }
-
-    .cal-day {
-        height: 46px;
-        background: transparent;
-        border: none;
         color: white;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 2px;
-        border-radius: 50%;
-    }
-
-    .cal-num {
-        width: 30px;
-        height: 30px;
-        line-height: 30px;
-        border-radius: 50%;
-        font-size: 1rem;
-    }
-
-    .cal-day.today .cal-num {
-        background: #ff3b30;
-    }
-
-    .cal-day.sel:not(.today) .cal-num {
-        background: rgba(255, 255, 255, 0.22);
-    }
-
-    .cal-day.sel.today .cal-num {
-        box-shadow: 0 0 0 2px white;
-    }
-
-    .cal-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-    }
-
-        .cal-dot.up {
-            background: #5fd68e;
-        }
-
-        .cal-dot.down {
-            background: #ff6b6b;
-        }
-
-    .cal-detail {
-        margin: 12px;
-        padding: 14px;
-        background: #1b1b24;
-        border-radius: 16px;
-    }
-
-        .cal-detail h4 {
-            margin: 0 0 8px;
-            text-transform: capitalize;
-        }
-
-    .cal-none {
-        opacity: 0.6;
-        margin: 0;
-    }
-
-    .cal-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-
-        .cal-list li {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(128, 128, 128, 0.25);
-        }
-
-        .cal-list .pos {
-            color: #5fd68e;
-        }
-
-        .cal-list .neg {
-            color: #ff8a8a;
-        }
-
-    .cal-total {
-        margin: 10px 0 0;
-        opacity: 0.8;
-        text-align: right;
+        background: #0b0b14;
+        letter-spacing: 1px;
     }
 </style>

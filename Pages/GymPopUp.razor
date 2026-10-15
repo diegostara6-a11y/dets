@@ -1,0 +1,90 @@
+﻿<dialog id="gymPopup" class="GymDialog"
+        onclick="if (event.target === this) this.close()">
+
+    <div class="GymBox">
+        <header class="GymHeader">
+            <h3>Palestra</h3>
+            <button class="GymClose" onclick="gymPopup.close()">✕</button>
+        </header>
+
+        <div class="GymButtons">
+            <button class="GymBtn" href="/gym">Inizia allenamento</button>
+            <button class="GymBtn" href="/gym">Esegui allenamento</button>
+            <button class="GymBtn GymBtnAlt" href="/gym">Modifica piano</button>
+        </div>
+    </div>
+</dialog>
+
+<style>
+    .GymDialog {
+        border: none;
+        padding: 0;
+        background: transparent;
+        width: min(85vw, 380px);
+        max-width: none;
+        overflow: visible;
+    }
+
+        .GymDialog::backdrop {
+            background: rgba(0, 0, 0, 0.6);
+        }
+
+    .GymBox {
+        padding: 20px;
+        border-radius: 20px;
+        background: #1f2937;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .GymHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+        .GymHeader h3 {
+            margin: 0;
+        }
+
+    .GymClose {
+        width: 36px;
+        height: 36px;
+        border: none;
+        border-radius: 50%;
+        background: #4b5563;
+        color: white;
+        font-size: 1rem;
+        cursor: pointer;
+    }
+
+    .GymButtons {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .GymBtn {
+        padding: 14px;
+        border: none;
+        border-radius: 12px;
+        font-size: 1rem;
+        color: white;
+        background: #3b82f6;
+        cursor: pointer;
+    }
+
+        .GymBtn:active {
+            filter: brightness(0.9);
+        }
+
+    .GymBtnAlt {
+        background: #4b5563;
+    }
+</style>
+
+@code {
+
+}
