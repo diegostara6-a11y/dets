@@ -2,9 +2,11 @@
 @inject NavigationManager Nav
 @inject HistoryService History
 @inject ISavingService SavingService
+@inject HistoryService History
 @using Microsoft.AspNetCore.Components.Web
 @using Dets.Models
 @using Dets.Services
+@using System.Globalization
 @inject IJSRuntime JS
 
 
@@ -38,6 +40,25 @@
     }
 </div>
 
+<div class="ToDoBox">
+    <h1>ToDo List</h1>
+    <h3>@DateTime.Today.ToString("D", CultureInfo.CurrentCulture)</h3>
+        <ul>
+            @foreach (var ev in events)
+            {
+                @if(ev.Day == DateTime.Today.Day && ev.Month == DateTime.Today.Month && ev.Year == DateTime.Today.Year)
+                {
+                <li>
+                    <strong>@ev.Name</strong>
+                    (@ev.Day/@ev.Month/@ev.Year)
+                    <br />
+                    @ev.Description
+                </li>
+                }
+        }
+        </ul>
+</div>
+
 <footer>
     @*TODO: aggiungi css e digli dove trovare il popup (non so fare)*@
     <button>
@@ -64,6 +85,17 @@
     private int GoalPoint;
     private List<HistoryEntry>? entries;
     private List<DayStat>? stats;
+    private List<Event> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        events = await SavingService.LoadAsync<List<Event>>("events")
+                 ?? new List<Event>();
+        entries = await History.GetRecentAsync();
+        stats = await History.GetDailyAsync();
+        points = await SavingService.LoadAsync<int>("points");
+        GoalPoint = await SavingService.LoadAsync<int>("goalpoints");
+    }
 
     private async Task Apply(string name, int value)
     {
@@ -109,15 +141,6 @@
 
     private string ImageFor(string name) =>
         Images.TryGetValue(name, out var path) ? path : "";
-
-    protected override async Task OnInitializedAsync()
-    {
-        entries = await History.GetRecentAsync();
-        stats = await History.GetDailyAsync();
-        points = await SavingService.LoadAsync<int>("points");
-        GoalPoint = await SavingService.LoadAsync<int>("goalpoints");
-    }
-
 
     private List<(string Name, int Value)> TopRecent(int days = 7, int take = 7)
     {
@@ -184,6 +207,11 @@
         margin: 0;
         padding: 0;
         overflow-x: hidden;
+    }
+
+    .ToDoBox {
+        padding: 12px;
+        color: white;
     }
 
     .header {

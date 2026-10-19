@@ -5,7 +5,26 @@
 @inject HistoryService History
 @inject ISavingService SavingService
 @inject NavigationManager Nav
+@inject GoogleCalendarService GoogleCalendar
 
+@code {
+    private async Task ImportFromGoogle()
+    {
+        var imported = await GoogleCalendar.ImportAsync(
+            new DateTime(month.Year, month.Month, 1).AddMonths(-1),
+            new DateTime(month.Year, month.Month, 1).AddMonths(3));
+
+        // evita duplicati se reimporti
+        foreach (var ev in imported)
+        {
+            bool exists = events.Any(e => e.Name == ev.Name
+                && e.Day == ev.Day && e.Month == ev.Month && e.Year == ev.Year);
+            if (!exists) events.Add(ev);
+        }
+
+        await SavingService.SaveAsync("events", events);
+    }
+}
 <header class="header" @onclick='() => Nav.NavigateTo("")'>
     <h2>Punteggio Vita</h2>
 </header>
@@ -59,6 +78,8 @@ else
     <button class="EventBtn" @onclick="ShowPopUp">
         <h2>Aggiungi Evento</h2>
     </button>
+
+    <button class="EventBtn" @onclick="ImportFromGoogle">Importa da Google Calendar</button>
 
     <div class="cal-detail">
         <h4>@selected.ToString("dddd d MMMM", it)</h4>

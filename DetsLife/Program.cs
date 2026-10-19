@@ -11,6 +11,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddSingleton<ISavingService, SaveOnDevice>();
 builder.Services.AddSingleton<HistoryService>();
+builder.Services.AddScoped<GoogleCalendarService>();
 
 var host = builder.Build();
 var js = host.Services.GetRequiredService<Microsoft.JSInterop.IJSRuntime>();
