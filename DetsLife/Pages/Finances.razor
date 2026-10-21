@@ -1,0 +1,660 @@
+﻿@page "/finances"
+@inject NavigationManager Nav
+@inject ISavingService SavingService
+@using Dets.Models
+@using Dets.Services
+@using System.Globalization
+
+<header class="header" @onclick='() => Nav.NavigateTo("")'>
+    <h1>DETS Life</h1>
+</header>
+
+@if (!loaded)
+{
+    <p class="FinMuted">Caricamento...</p>
+}
+else
+{
+    <div class="FinPage">
+
+        @* ---------- Selettore mese ---------- *@
+        <div class="MonthBar">
+            <button class="FinNavBtn" @onclick="() => ChangeMonth(-1)">‹</button>
+            <h2>@month.ToString("MMMM yyyy", it)</h2>
+            <button class="FinNavBtn" @onclick="() => ChangeMonth(1)">›</button>
+        </div>
+
+        @* ---------- Bilancio ---------- *@
+        <div class="CardRow">
+            <div class="FinCard">
+                <span class="FinLabel">Entrate</span>
+                <span class="FinValue pos">@Money(income)</span>
+            </div>
+            <div class="FinCard">
+                <span class="FinLabel">Spese</span>
+                <span class="FinValue neg">@Money(expenses)</span>
+            </div>
+            <div class="FinCard">
+                <span class="FinLabel">Bilancio del mese</span>
+                <span class="FinValue @(balance >= 0 ? "pos" : "neg")">@Money(balance)</span>
+            </div>
+            <div class="FinCard">
+                <span class="FinLabel">Saldo totale</span>
+                <span class="FinValue @(totalBalance >= 0 ? "pos" : "neg")">@Money(totalBalance)</span>
+            </div>
+        </div>
+
+        @* ---------- Punteggio risparmio ---------- *@
+        <div class="FinBox ScoreBox">
+            <h3>Punteggio risparmio</h3>
+            @if (score is null)
+            {
+                <p class="FinMuted">Registra almeno un'entrata per vedere il punteggio.</p>
+            }
+            else
+            {
+                <div class="ScoreTop">
+                    <span class="ScoreNumber @ScoreClass(score.Value)">@score</span>
+                    <span class="ScoreMax">/ 100</span>
+                </div>
+                <div class="ScoreTrack">
+                    <div class="ScoreFill @ScoreClass(score.Value)" style="width:@(score)%"></div>
+                </div>
+                <p class="ScoreLabel">@FinanceCalculator.Label(score)</p>
+                <p class="FinMuted">
+                    Hai risparmiato il @((savingsRate ?? 0).ToString("P0", it)) delle entrate
+                    (obiettivo: @FinanceCalculator.TargetSavingsRate.ToString("P0", it) per il massimo).
+                    Punti vita del mese: <strong>@(lifePoints > 0 ? "+" : "")@lifePoints</strong>
+                </p>
+            }
+        </div>
+
+        @* ---------- Torta per categoria ---------- *@
+        <div class="FinBox">
+            <h3>Dove spendo di più</h3>
+            @if (slices.Count == 0)
+            {
+                <p class="FinMuted">Nessuna spesa in questo mese.</p>
+            }
+            else
+            {
+                <div class="PieWrap">
+                    <svg class="PieSvg" viewBox="-1.05 -1.05 2.1 2.1">
+                        @foreach (var s in slices)
+                        {
+                            <path d="@s.Path" fill="@s.Color" />
+                        }
+                        <circle r="0.58" fill="#14141f" />
+                        <text x="0" y="-0.02" text-anchor="middle" fill="white" font-size="0.17" font-weight="700">@Money(expenses)</text>
+                        <text x="0" y="0.17" text-anchor="middle" fill="#9a9ab0" font-size="0.1">spese</text>
+                    </svg>
+
+                    <ul class="Legend">
+                        @foreach (var s in slices)
+                        {
+                            <li>
+                                <span class="Dot" style="background:@s.Color"></span>
+                                <span class="LegendIcon">@((MarkupString)s.Cat.Icon())</span>
+                                <span class="LegendName">@s.Cat</span>
+                                <span class="LegendVal">@Money(s.Total) · @s.Pct.ToString("P0", it)</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+
+        @* ---------- Spese giorno per giorno ---------- *@
+        <div class="FinBox">
+            <h3>Spese giorno per giorno</h3>
+            @if (expenses <= 0)
+            {
+                <p class="FinMuted">Nessuna spesa in questo mese.</p>
+            }
+            else
+            {
+                <svg class="ChartSvg" viewBox="0 0 300 130" preserveAspectRatio="none">
+                    @for (var i = 0; i < daily.Length; i++)
+                    {
+                        var h = maxDaily <= 0 ? 0 : (double)(daily[i] / maxDaily) * 100;
+                        var w = 300.0 / daily.Length;
+                        <rect x="@F(i * w + 1)" y="@F(110 - h)" width="@F(Math.Max(w - 2, 1))" height="@F(h)"
+                              rx="2" fill="#ef4444" opacity="@(daily[i] > 0 ? "0.9" : "0.15")" />
+                    }
+                    <line x1="0" y1="110" x2="300" y2="110" stroke="#444" stroke-width="0.5" />
+                    <text x="0" y="125" fill="#9a9ab0" font-size="9">1</text>
+                    <text x="150" y="125" fill="#9a9ab0" font-size="9" text-anchor="middle">@(daily.Length / 2)</text>
+                    <text x="300" y="125" fill="#9a9ab0" font-size="9" text-anchor="end">@daily.Length</text>
+                </svg>
+                <p class="FinMuted">Giorno più costoso: <strong>@Money(maxDaily)</strong></p>
+            }
+        </div>
+
+        @* ---------- Andamento del bilancio ---------- *@
+        <div class="FinBox">
+            <h3>Andamento del bilancio</h3>
+            @if (monthTx.Count == 0)
+            {
+                <p class="FinMuted">Nessun movimento in questo mese.</p>
+            }
+            else
+            {
+                <svg class="ChartSvg" viewBox="0 0 300 130" preserveAspectRatio="none">
+                    <line x1="0" y1="@F(zeroY)" x2="300" y2="@F(zeroY)" stroke="#555" stroke-width="0.6" stroke-dasharray="3 3" />
+                    <polyline points="@linePoints" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" />
+                    <text x="0" y="125" fill="#9a9ab0" font-size="9">1</text>
+                    <text x="300" y="125" fill="#9a9ab0" font-size="9" text-anchor="end">@daily.Length</text>
+                </svg>
+                <p class="FinMuted">La linea tratteggiata è lo zero: sopra sei in positivo, sotto sei in rosso.</p>
+            }
+        </div>
+
+        @* ---------- Storico ---------- *@
+        <div class="FinBox">
+            <h3>Storico movimenti</h3>
+            @if (monthTx.Count == 0)
+            {
+                <p class="FinMuted">Nessun movimento in questo mese.</p>
+            }
+            else
+            {
+                <ul class="TxList">
+                    @foreach (var t in monthTx.OrderByDescending(x => x.Date))
+                    {
+                        <li class="TxItem">
+                            <span class="TxIcon">@((MarkupString)t.Category.Icon())</span>
+                            <div class="TxInfo">
+                                <strong>@t.Name</strong>
+                                <small>@t.Category · @t.Date.ToString("d MMM", it)@(string.IsNullOrWhiteSpace(t.Note) ? "" : " · " + t.Note)</small>
+                            </div>
+                            <span class="TxAmount @(t.Type == TransactionType.Entrata ? "pos" : "neg")">
+                                @(t.Type == TransactionType.Entrata ? "+" : "-")@Money(Math.Abs(t.Amount))
+                            </span>
+                            <button class="TxDelete" title="Elimina" @onclick="() => Delete(t)">✕</button>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+}
+
+<footer>
+    @*TODO: aggiungi css e digli dove trovare il popup (non so fare)*@
+    <button @onclick='() => Nav.NavigateTo("Finances")'>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-cash" viewBox="0 0 16 16">
+            <path d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4" />
+            <path d="M0 4a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm3 0a2 2 0 0 1-2 2v4a2 2 0 0 1 2 2h10a2 2 0 0 1 2-2V6a2 2 0 0 1-2-2z" />
+        </svg>  <!--Finanze-->
+    </button>
+    <button @onclick='() => Nav.NavigateTo("timeline")'>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bar-chart" viewBox="0 0 16 16">
+            <path d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z" />
+        </svg>  <!--Storico-->
+    </button>
+    <button @onclick='() => Nav.NavigateTo("calendar")'>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-calendar-date" viewBox="0 0 16 16">
+            <path d="M6.445 11.688V6.354h-.633A13 13 0 0 0 4.5 7.16v.695c.375-.257.969-.62 1.258-.777h.012v4.61zm1.188-1.305c.047.64.594 1.406 1.703 1.406 1.258 0 2-1.066 2-2.871 0-1.934-.781-2.668-1.953-2.668-.926 0-1.797.672-1.797 1.809 0 1.16.824 1.77 1.676 1.77.746 0 1.23-.376 1.383-.79h.027c-.004 1.316-.461 2.164-1.305 2.164-.664 0-1.008-.45-1.05-.82zm2.953-2.317c0 .696-.559 1.18-1.184 1.18-.601 0-1.144-.383-1.144-1.2 0-.823.582-1.21 1.168-1.21.633 0 1.16.398 1.16 1.23" />
+            <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z" />
+        </svg>
+    </button>
+</footer>
+
+@code {
+    private static readonly CultureInfo it = new("it-IT");
+
+    private static readonly Dictionary<Category, string> Colors = new()
+    {
+        [Category.Cibo] = "#f97316",
+        [Category.Trasporti] = "#3b82f6",
+        [Category.Svago] = "#a855f7",
+        [Category.Abbonamenti] = "#ec4899",
+        [Category.Casa] = "#eab308",
+        [Category.Salute] = "#22c55e",
+        [Category.Risparmio] = "#14b8a6",
+        [Category.Altro] = "#94a3b8"
+    };
+
+    private record Slice(Category Cat, decimal Total, double Pct, string Path, string Color);
+
+    private bool loaded;
+    private List<Transaction> all = new();
+    private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    // valori calcolati per il mese mostrato
+    private List<Transaction> monthTx = new();
+    private decimal income, expenses, balance, totalBalance, maxDaily;
+    private double? savingsRate;
+    private int? score;
+    private int lifePoints;
+    private decimal[] daily = Array.Empty<decimal>();
+    private List<Slice> slices = new();
+    private string linePoints = "";
+    private double zeroY = 100;
+
+    protected override async Task OnInitializedAsync()
+    {
+        all = await SavingService.LoadAsync<List<Transaction>>("transactions") ?? new List<Transaction>();
+        Recalc();
+        loaded = true;
+    }
+
+    private void ChangeMonth(int delta)
+    {
+        month = month.AddMonths(delta);
+        Recalc();
+    }
+
+    private async Task Delete(Transaction t)
+    {
+        all.Remove(t);
+        await SavingService.SaveAsync("transactions", all);
+        Recalc();
+    }
+
+    private void Recalc()
+    {
+        monthTx = all.Where(t => t.Date.Year == month.Year && t.Date.Month == month.Month).ToList();
+
+        income = FinanceCalculator.Income(monthTx);
+        expenses = FinanceCalculator.Expenses(monthTx);
+        balance = income - expenses;
+        totalBalance = FinanceCalculator.Balance(all);
+
+        savingsRate = FinanceCalculator.SavingsRate(income, expenses);
+        score = FinanceCalculator.Score(income, expenses);
+        lifePoints = FinanceCalculator.LifePoints(score);
+
+        BuildPie();
+        BuildDaily();
+    }
+
+    private void BuildPie()
+    {
+        slices = new List<Slice>();
+        var cats = FinanceCalculator.ExpensesByCategory(monthTx);
+        var sum = cats.Sum(c => c.Total);
+        if (sum <= 0) return;
+
+        double start = -Math.PI / 2;
+        foreach (var (cat, total) in cats)
+        {
+            var frac = (double)(total / sum);
+            var end = start + frac * 2 * Math.PI;
+            string path;
+
+            if (frac >= 0.9999)
+            {
+                path = "M 0 -1 A 1 1 0 1 1 0 1 A 1 1 0 1 1 0 -1 Z";
+            }
+            else
+            {
+                var large = frac > 0.5 ? 1 : 0;
+                path = $"M 0 0 L {F(Math.Cos(start))} {F(Math.Sin(start))} " +
+                       $"A 1 1 0 {large} 1 {F(Math.Cos(end))} {F(Math.Sin(end))} Z";
+            }
+
+            slices.Add(new Slice(cat, total, frac, path, Colors.GetValueOrDefault(cat, "#94a3b8")));
+            start = end;
+        }
+    }
+
+    private void BuildDaily()
+    {
+        var days = DateTime.DaysInMonth(month.Year, month.Month);
+        daily = new decimal[days];
+        var net = new decimal[days];
+
+        foreach (var t in monthTx)
+        {
+            var i = t.Date.Day - 1;
+            if (FinanceCalculator.IsSpending(t))
+            {
+                daily[i] += Math.Abs(t.Amount);
+                net[i] -= Math.Abs(t.Amount);
+            }
+            else if (FinanceCalculator.IsIncome(t))
+            {
+                net[i] += Math.Abs(t.Amount);
+            }
+        }
+
+        maxDaily = daily.Length == 0 ? 0 : daily.Max();
+
+        // bilancio cumulativo (si ferma a oggi se è il mese corrente)
+        var isCurrent = month.Year == DateTime.Today.Year && month.Month == DateTime.Today.Month;
+        var last = isCurrent ? DateTime.Today.Day : days;
+
+        var running = new List<decimal>();
+        decimal acc = 0;
+        for (var i = 0; i < last; i++)
+        {
+            acc += net[i];
+            running.Add(acc);
+        }
+
+        var min = (double)Math.Min(0, running.Min());
+        var max = (double)Math.Max(0, running.Max());
+        if (max - min < 0.0001) max = min + 1;
+
+        double Y(decimal v) => 10 + (1 - ((double)v - min) / (max - min)) * 90;
+        zeroY = Y(0);
+
+        var points = new List<string>();
+        for (var i = 0; i < running.Count; i++)
+        {
+            var x = days <= 1 ? 0 : i * 300.0 / (days - 1);
+            points.Add($"{F(x)},{F(Y(running[i]))}");
+        }
+        linePoints = string.Join(" ", points);
+    }
+
+    // numeri con il punto decimale: in SVG la virgola italiana romperebbe il disegno
+    private static string F(double v) => v.ToString("0.####", CultureInfo.InvariantCulture);
+
+    private static string Money(decimal v) => v.ToString("C", it);
+
+    private static string ScoreClass(int s) =>
+        s >= 65 ? "great" : s >= 40 ? "mid" : "low";
+}
+
+<style>
+    html, body {
+        background-color: black;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+    }
+
+    .header {
+        position: sticky; /* la barra nera resta fissa in alto */
+        top: 0;
+        z-index: 10;
+        margin: 0;
+        padding: 12px 0 8px;
+        text-align: center;
+        color: white;
+        background: #0b0b14;
+        letter-spacing: 1px;
+    }
+
+    .FinPage {
+        padding: 12px 12px 90px;
+        color: white;
+        max-width: 720px;
+        margin: 0 auto;
+    }
+
+    .FinMuted {
+        color: #9a9ab0;
+        font-size: 0.9rem;
+        margin: 8px 0 0;
+    }
+
+    .MonthBar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+
+        .MonthBar h2 {
+            margin: 0;
+            text-transform: capitalize;
+        }
+
+    .FinNavBtn {
+        background: #1c1c28;
+        color: white;
+        border: 1px solid #444;
+        border-radius: 10px;
+        width: 42px;
+        height: 42px;
+        font-size: 1.4rem;
+        cursor: pointer;
+    }
+
+    .CardRow {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .FinCard {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 14px;
+        background: #14141f;
+        border: 1px solid #2a2a3c;
+        border-radius: 14px;
+    }
+
+    .FinLabel {
+        color: #9a9ab0;
+        font-size: 0.8rem;
+    }
+
+    .FinValue {
+        font-size: 1.25rem;
+        font-weight: 800;
+    }
+
+    .pos {
+        color: #4ade80;
+    }
+
+    .neg {
+        color: #f87171;
+    }
+
+    .FinBox {
+        background: #14141f;
+        border: 1px solid #2a2a3c;
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 12px;
+    }
+
+        .FinBox h3 {
+            margin: 0 0 10px;
+            font-size: 1.05rem;
+        }
+
+    .ScoreTop {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+    }
+
+    .ScoreNumber {
+        font-size: 3rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+
+    .ScoreMax {
+        color: #9a9ab0;
+    }
+
+    .ScoreTrack {
+        height: 12px;
+        background: #262636;
+        border-radius: 6px;
+        overflow: hidden;
+        margin: 10px 0;
+    }
+
+    .ScoreFill {
+        height: 100%;
+        border-radius: 6px;
+        transition: width 0.4s ease;
+    }
+
+    .ScoreLabel {
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .ScoreNumber.great {
+        color: #fcd34d;
+    }
+
+    .ScoreFill.great {
+        background: linear-gradient(90deg, #fcd34d, #b8860b);
+    }
+
+    .ScoreNumber.mid {
+        color: #60a5fa;
+    }
+
+    .ScoreFill.mid {
+        background: linear-gradient(90deg, #3b82f6, #1e3a8a);
+    }
+
+    .ScoreNumber.low {
+        color: #f87171;
+    }
+
+    .ScoreFill.low {
+        background: linear-gradient(90deg, #ef4444, #7f1d1d);
+    }
+
+    .PieWrap {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .PieSvg {
+        width: 190px;
+        height: 190px;
+        flex: 0 0 auto;
+        margin: 0 auto;
+    }
+
+    .Legend {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        flex: 1 1 200px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+        .Legend li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+    .Dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+    }
+
+    .LegendName {
+        flex: 1;
+    }
+
+    .LegendVal {
+        color: #9a9ab0;
+        font-size: 0.85rem;
+    }
+
+    .ChartSvg {
+        width: 100%;
+        height: 160px;
+        display: block;
+    }
+
+    .TxList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .TxItem {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        background: #1c1c28;
+        border-radius: 10px;
+    }
+
+    .TxIcon {
+        font-size: 1.4rem;
+        width: 32px;
+        text-align: center;
+    }
+
+    .TxInfo {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+        .TxInfo small {
+            color: #9a9ab0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+    .TxAmount {
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .TxDelete {
+        background: transparent;
+        border: none;
+        color: #777;
+        cursor: pointer;
+        font-size: 1rem;
+    }
+
+        .TxDelete:hover {
+            color: #f87171;
+        }
+
+    footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+        background: black;
+        color: white;
+        z-index: 10;
+    }
+
+        footer svg {
+            width: 28px;
+            height: 28px;
+            fill: white;
+        }
+
+        footer button {
+            background: transparent;
+            color: white;
+            border: 1px solid white;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+</style>

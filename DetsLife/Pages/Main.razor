@@ -40,32 +40,39 @@
     }
 </div>
 
-<div class="ToDoBox">
-    <h1>ToDo List</h1>
-    <h3>@DateTime.Today.ToString("D", CultureInfo.CurrentCulture)</h3>
-        <ul>
-            @foreach (var ev in events)
-            {
-                @if(ev.Day == DateTime.Today.Day && ev.Month == DateTime.Today.Month && ev.Year == DateTime.Today.Year)
+<div>
+    <div class="FinanceBox">
+        <button class="EventBtn" @onclick="ShowPopUp">
+            <h2>Aggiungi transazione</h2>
+        </button>
+    </div>
+    <div class="ToDoBox">
+        <h1>ToDo List</h1>
+        <h3>@DateTime.Today.ToString("D", CultureInfo.CurrentCulture)</h3>
+            <ul>
+                @foreach (var ev in events)
                 {
-                <li>
-                    <strong>@ev.Name</strong>
-                    (@ev.Day/@ev.Month/@ev.Year)
-                    <br />
-                    @ev.Description
-                </li>
-                }
-        }
-        </ul>
+                    @if(ev.Day == DateTime.Today.Day && ev.Month == DateTime.Today.Month && ev.Year == DateTime.Today.Year)
+                    {
+                    <li>
+                        <strong>@ev.Name</strong>
+                        (@ev.Day/@ev.Month/@ev.Year)
+                        <br />
+                        @ev.Description
+                    </li>
+                    }
+            }
+            </ul>
+    </div>
 </div>
 
 <footer>
     @*TODO: aggiungi css e digli dove trovare il popup (non so fare)*@
-    <button>
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard2-pulse-fill" viewBox="0 0 16 16">
-            <path d="M10 .5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5.5.5 0 0 1-.5.5.5.5 0 0 0-.5.5V2a.5.5 0 0 0 .5.5h5A.5.5 0 0 0 11 2v-.5a.5.5 0 0 0-.5-.5.5.5 0 0 1-.5-.5" />
-            <path d="M4.085 1H3.5A1.5 1.5 0 0 0 2 2.5v12A1.5 1.5 0 0 0 3.5 16h9a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 12.5 1h-.585q.084.236.085.5V2a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 4 2v-.5q.001-.264.085-.5M9.98 5.356 11.372 10h.128a.5.5 0 0 1 0 1H11a.5.5 0 0 1-.479-.356l-.94-3.135-1.092 5.096a.5.5 0 0 1-.968.039L6.383 8.85l-.936 1.873A.5.5 0 0 1 5 11h-.5a.5.5 0 0 1 0-1h.191l1.362-2.724a.5.5 0 0 1 .926.08l.94 3.135 1.092-5.096a.5.5 0 0 1 .968-.039Z" />
-        </svg>  <!--Palestra-->
+    <button @onclick='() => Nav.NavigateTo("Finances")'>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-cash" viewBox="0 0 16 16">
+            <path d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4" />
+            <path d="M0 4a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm3 0a2 2 0 0 1-2 2v4a2 2 0 0 1 2 2h10a2 2 0 0 1 2-2V6a2 2 0 0 1-2-2z" />
+        </svg>  <!--Finanze-->
     </button>
     <button @onclick='() => Nav.NavigateTo("timeline")'>
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bar-chart" viewBox="0 0 16 16">
@@ -80,12 +87,138 @@
     </button>
 </footer>
 
+@if (showPopUp)
+{
+    <div class="PopupBackdrop" @onclick="ClosePopup">
+        <div class="PopupBox" @onclick:stopPropagation="true">
+            <h3>Aggiungi Transazione</h3>
+            <h5>@selected.ToString("dddd d MMMM yyyy", it)</h5>
+
+            <label for="transactionName">Nome transazione</label>
+            <input id="transactionName"
+                   class="PopupInput"
+                   type="text"
+                   @bind="transactionName"
+                   placeholder="Es. Spesa supermercato" />
+
+            <label for="transactionAmount">Importo</label>
+            <input id="transactionAmount"
+                   class="PopupInput"
+                   type="number"
+                   step="0.01"
+                   @bind="transactionAmount" />
+
+            <label>Categoria</label>
+            <div class="CategoryDropdown">
+                <button type="button"
+                        class="CategorySelected"
+                        @onclick="() => categoryOpen = !categoryOpen">
+                    <span class="CategoryIcon">@((MarkupString)transactionCategory.Icon())</span>
+                    <span class="CategoryName">@transactionCategory</span>
+                    <span class="CategoryArrow">@(categoryOpen ? "▲" : "▼")</span>
+                </button>
+
+                @if (categoryOpen)
+                {
+                    <ul class="CategoryList">
+                        @foreach (var cat in Enum.GetValues<Category>())
+                        {
+                            <li class="CategoryItem @(cat == transactionCategory ? "active" : "")"
+                                @onclick="() => SelectCategory(cat)">
+                                <span class="CategoryIcon">@((MarkupString)cat.Icon())</span>
+                                <span class="CategoryName">@cat</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            <label for="transactionNote">Nota</label>
+            <textarea id="transactionNote"
+                      class="PopupInput"
+                      @bind="transactionNote"
+                      placeholder="Nota (opzionale)"></textarea>
+
+            <select class="PopupInput" @bind="transactionType">
+                <option value="@TransactionType.Spesa">Spesa</option>
+                <option value="@TransactionType.Entrata">Entrata</option>
+            </select>
+
+            <div class="PopupButtons">
+                <button class="PopupBtn cancel" @onclick="ClosePopup">
+                    Annulla
+                </button>
+                <button class="PopupBtn ok" @onclick="SaveTransaction">
+                    Salva
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
+    private static readonly CultureInfo it = new("it-IT");
     private int points;
     private int GoalPoint;
     private List<HistoryEntry>? entries;
     private List<DayStat>? stats;
-    private List<Event> events = new();
+
+    private bool showPopUp = false;
+    private Dictionary<DateTime, int> totals = new();
+    private DateTime month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime selected = DateTime.Today;
+    private List<Event> events = new();                       
+    private List<Transaction> transactions = new();          
+    private string transactionName = "";
+    private string transactionNote = "";
+    private decimal transactionAmount = 1.0m;
+    private Category transactionCategory = Category.Altro;
+    private bool categoryOpen = false;
+    private TransactionType transactionType = TransactionType.Spesa;
+
+    private void SelectCategory(Category cat)
+    {
+        transactionCategory = cat;
+        categoryOpen = false;
+    }
+
+
+    private void ClosePopup()
+    {
+        showPopUp = false;
+    }
+    
+    private void ShowPopUp()
+    {
+        transactionName = "";
+        transactionNote = "";
+        transactionAmount = 1.0m;
+        transactionCategory = Category.Altro;
+        showPopUp = true;
+        transactionType = TransactionType.Spesa;
+    }
+
+    private async Task SaveTransaction()
+    {
+        if (string.IsNullOrWhiteSpace(transactionName))
+            return;
+
+        var newTransaction = new Transaction
+        {
+            Name = transactionName.Trim(),
+            Note = transactionNote.Trim(),
+            Amount = transactionAmount,
+            Category = transactionCategory,
+            Date = selected,
+            Type = transactionType,
+        };
+
+        transactions.Add(newTransaction);
+        await SavingService.SaveAsync("transactions", transactions);
+
+        ClosePopup();
+    }
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -95,6 +228,8 @@
         stats = await History.GetDailyAsync();
         points = await SavingService.LoadAsync<int>("points");
         GoalPoint = await SavingService.LoadAsync<int>("goalpoints");
+        transactions = await SavingService.LoadAsync<List<Transaction>>("transactions")
+                       ?? new List<Transaction>();
     }
 
     private async Task Apply(string name, int value)
@@ -416,6 +551,220 @@
             border-radius: 8px;
             padding: 6px 12px;
             font-size: 1rem;
+        }
+
+    .EventBtn {
+        display: block;
+        background: linear-gradient(135deg, #292938, #1b1b24);
+        color: white;
+        border: 1px solid rgba(165, 139, 255, 0.3);
+        border-radius: 16px;
+        padding: 12px 16px;
+        margin: 14px 12px;
+        width: calc(100% - 24px);
+        text-align: center;
+        cursor: pointer;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        transition: transform 0.15s ease, filter 0.15s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+        .EventBtn h2 {
+            font-size: 1rem;
+            margin: 0;
+            font-weight: 700;
+        }
+
+        .EventBtn:active {
+            transform: scale(0.98);
+            filter: brightness(1.2);
+        }
+
+    /* Popup */
+    .PopupBackdrop {
+        position: fixed;
+        inset: 0;
+        padding: 20px;
+        box-sizing: border-box;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        animation: popupFade 0.18s ease-out;
+    }
+
+    .PopupBox {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 380px;
+        max-height: 85vh;
+        overflow-y: auto;
+        padding: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        background: #1f2937;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        box-shadow: 0 16px 50px rgba(0, 0, 0, 0.45);
+    }
+
+        .PopupBox h3 {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        .PopupBox h5 {
+            margin: 0;
+            color: #c4c4d4;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+
+        .PopupBox label {
+            margin-bottom: -8px;
+            color: #d1d5db;
+            font-size: 0.88rem;
+            font-weight: 600;
+        }
+
+    .PopupInput {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        padding: 12px 14px;
+        border: 1px solid #414152;
+        border-radius: 10px;
+        outline: none;
+        background: #11111b;
+        color: white;
+        font-family: inherit;
+        font-size: 1rem;
+        color-scheme: dark;
+    }
+
+        .PopupInput::placeholder {
+            color: #858596;
+        }
+
+        .PopupInput:focus {
+            border-color: #a58bff;
+            box-shadow: 0 0 0 2px rgba(165, 139, 255, 0.15);
+        }
+
+    .PopupBox textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    .PopupButtons {
+        display: flex;
+        gap: 10px;
+        margin-top: 4px;
+    }
+
+    .PopupBtn {
+        flex: 1;
+        min-width: 0;
+        padding: 12px 10px;
+        border: none;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: white;
+        cursor: pointer;
+        transition: filter 0.15s ease, transform 0.15s ease;
+    }
+
+        .PopupBtn:active {
+            transform: scale(0.97);
+            filter: brightness(0.9);
+        }
+
+        .PopupBtn.cancel {
+            background: #4b5563;
+        }
+
+        .PopupBtn.ok {
+            background: linear-gradient(135deg, #22c55e, #15803d);
+        }
+
+    .CategoryDropdown {
+        position: relative;
+        width: 100%;
+        margin-bottom: 12px;
+    }
+
+    .CategorySelected {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 10px 12px;
+        background: #1c1c28;
+        color: white;
+        border: 1px solid #444;
+        border-radius: 10px;
+        font-size: 1rem;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .CategoryArrow {
+        margin-left: auto;
+        font-size: 0.7rem;
+        opacity: 0.7;
+    }
+
+    .CategoryList {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 20;
+        margin: 0;
+        padding: 4px;
+        list-style: none;
+        max-height: 220px;
+        overflow-y: auto;
+        background: #1c1c28;
+        border: 1px solid #444;
+        border-radius: 10px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .CategoryItem {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        color: white;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+        .CategoryItem:hover {
+            background: #2d2d3f;
+        }
+
+        .CategoryItem.active {
+            background: #3b3b55;
+        }
+
+    .CategoryIcon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        font-size: 1.2rem;
+    }
+
+        .CategoryIcon svg {
+            width: 20px;
+            height: 20px;
         }
 
 </style>
