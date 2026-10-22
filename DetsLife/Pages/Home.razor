@@ -5,6 +5,7 @@
 @inject HistoryService History
 @inject NavigationManager Nav
 
+
 <div class="Root"
      @onpointerdown="OnPointerDown"
      @onpointerup="OnPointerUp"
@@ -12,114 +13,26 @@
 
     <header class="header">
         <h2>Punteggio Vita</h2>
-        <div class="Dots">
-            <span class="Dot @(page == 0 ? "on" : "")"></span>
-            <span class="Dot @(page == 1 ? "on" : "")"></span>
-        </div>
     </header>
 
-    <div class="Pager">
-        <div class="Track" style="@TrackStyle">
+    <div class="InfoBox @GetBackgroundColor(points)">
+        <h1>@points</h1>
+    </div>
 
-            <div class="Page">
-                <div class="InfoBox @GetBackgroundColor(points)">
-                    <h1>@points</h1>
-                </div>
-
-                <div class="ActionGrid">
-                    @foreach (var action in actions)
-                    {
-                        <button class="ActionButton @(action.Value < 0 ? "negative" : "positive")"
-                                @onclick="() => Apply(action)">
-                            <span class="ActionName">@action.Name</span>
-                            <span class="ActionValue">@(action.Value > 0 ? "+" : "")@action.Value</span>
-                        </button>
-                    }
-                </div>
-            </div>
-
-            <div class="Page">
-                <div class="InfoBox @GetBackgroundColorGoal(GoalPoint)">
-                    <h1>@GoalPoint</h1>
-                    <h2>Prossimo premio tra @NextPrizeDist punti</h2>
-                </div>
-
-                <div class="GoalGrid">
-                    <button class="ActionButtonClean" @onclick="ClearGoals">
-                        <span class="ActionName">Azzera</span>
-                    </button>
-                    @foreach (var g in goal)
-                    {
-                        <div class="GoalItem">
-                            <button class="ActionButton @(g.Value < 0 ? "negative" : "positive")"
-                                    @onclick="() => Apply(g)">
-                                <span class="ActionName">@g.Name</span>
-                                <span class="ActionValue">@(g.Value > 0 ? "+" : "")@g.Value</span>
-                            </button>
-
-                            <button class="DeleteBtn" @onclick="() => AskDelete(g)">✕</button>
-                        </div>
-                    }
-                    <button class="ActionButton" @onclick="AddGoal">
-                        <span class="ActionName">Aggiungi Obiettivo</span>
-                    </button>
-                </div>
-            </div>
-        </div>
+    <div class="ActionGrid">
+        @foreach (var action in actions)
+        {
+            <button class="ActionButton @(action.Value < 0 ? "negative" : "positive")"
+                    @onclick="() => Apply(action)">
+                <span class="ActionName">@action.Name</span>
+                <span class="ActionValue">
+                    @(action.Value > 0 ? "+" : "")@action.Value
+                </span>
+            </button>
+        }
     </div>
 </div>
 
-
-
-
-
-@if (goalToDelete is not null)
-{
-    <div class="PopupBackdrop" @onclick="CancelDelete">
-        <div class="PopupBox" @onclick:stopPropagation="true">
-            <h3>Eliminare l'obiettivo?</h3>
-            <p>"@goalToDelete.Name" verrà rimosso.</p>
-
-            <div class="PopupButtons">
-                <button class="PopupBtn cancel" @onclick="CancelDelete">Annulla</button>
-                <button class="PopupBtn danger" @onclick="ConfirmDelete">Elimina</button>
-            </div>
-        </div>
-    </div>
-}
-
-<GymPopUp />
-
-@if (GoalPopUpVisible)
-{
-    <div class="PopupBackdrop" @onclick="Cancel">
-        <div class="PopupBox" @onclick:stopPropagation="true">
-            <h3>Nuova azione</h3>
-
-            <input class="PopupInput" placeholder="Nome" @bind="name" />
-            <input class="PopupInput" placeholder="Punti (da 1 a 5)" type="number" @bind="value" />
-
-            <div class="PopupButtons">
-                <button class="PopupBtn cancel" @onclick="Cancel">Annulla</button>
-                <button class="PopupBtn ok" @onclick="Confirm">Aggiungi</button>
-            </div>
-        </div>
-    </div>
-}
-
-@if (showPrize && randomAction is not null)
-{
-    <div class="PopupBackdrop" @onclick="ClosePrize">
-        <div class="PopupBox" @onclick:stopPropagation="true">
-            <h3>Congratulazioni!</h3>
-            <p>Hai superato i @(GoalPoint / 10 * 10) punti! La tua ricompensa è:</p>
-            <h1>@randomAction.Name</h1>
-            <div class="PopupButtons">
-                <button class="PopupBtn ok" @onclick="ClosePrize">Chiudi</button>
-            </div>
-        </div>
-    </div>
-}
 
 
 @code {
@@ -273,6 +186,7 @@
         var saved = await SavingService.LoadAsync<List<GoalAction>>("goals");
         if (saved is not null)
             goal = saved;
+        await SavingService.DeleteAsync("goals");
     }
 
     private void AddGoal()
@@ -319,6 +233,7 @@
         startX = null;
     }
 
+
     private void OnPointerUp(PointerEventArgs e)
     {
         if (startX is null) return;
@@ -327,11 +242,15 @@
         double dy = e.ClientY - startY;
         startX = null;
 
-        if (Math.Abs(dx) < 60 || Math.Abs(dy) > Math.Abs(dx)) return;
+        // Ignora movimenti brevi o prevalentemente verticali
+        if (Math.Abs(dx) < 60 || Math.Abs(dy) > Math.Abs(dx))
+            return;
 
-        if (dx < 0 && page == 0) page = 1;   // swipe a sinistra -> obiettivi
-        if (dx > 0 && page == 1) page = 0;   // swipe a destra -> punti normali
+        // Swipe verso sinistra: apri Goals
+        if (dx < 0)
+            Nav.NavigateTo("/goals");
     }
+
 
     private string name = "";
     private int value;
