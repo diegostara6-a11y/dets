@@ -1,0 +1,123 @@
+﻿@namespace Dets.Components.Shared
+@using global::DetsLife
+@inject TrophyService Trophies
+
+@if (alerts.Count > 0)
+{
+    <div class="AlertStack">
+        @foreach (var a in alerts)
+        {
+            <div class="AlertCard" @key="a.Id">
+                <div class="AlertMedal tier-@a.Tier.ToString().ToLowerInvariant()">@a.Icon</div>
+                <div class="AlertText">
+                    <strong>Trofeo ottenuto!</strong>
+                    <span>@Label(a)</span>
+                </div>
+                <button class="AlertClose" aria-label="Chiudi" @onclick="() => Dismiss(a)">✕</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<TrophyAlert> alerts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Trophies.CheckAsync();     // controlla anche i trofei legati al passare del tempo
+        alerts = await Trophies.GetAlertsAsync();
+    }
+
+    private static string Label(TrophyAlert a) =>
+        a.TimesEarned > 1 ? $"{a.Name} · {a.TimesEarned}ª volta" : a.Name;
+
+    private async Task Dismiss(TrophyAlert a)
+    {
+        await Trophies.DismissAlertAsync(a.Id);
+        alerts.Remove(a);
+    }
+}
+
+<style>
+    .AlertStack {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 200;
+        width: min(360px, calc(100% - 24px));
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .AlertCard {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        color: white;
+        background: rgba(20, 20, 28, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+    }
+
+    .AlertMedal {
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        box-shadow: inset 0 0 0 3px rgba(255,255,255,0.28);
+    }
+
+    .AlertText {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        font-size: 0.9rem;
+    }
+
+        .AlertText span {
+            opacity: 0.8;
+            font-size: 0.8rem;
+        }
+
+    .AlertClose {
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+        color: white;
+        cursor: pointer;
+    }
+
+    .tier-bronze {
+        background: radial-gradient(circle at 30% 25%, #e8b182, #8a5a30 60%, #4a2d14);
+    }
+
+    .tier-silver {
+        background: radial-gradient(circle at 30% 25%, #f2f4f6, #9aa0a6 60%, #5b6066);
+    }
+
+    .tier-gold {
+        background: radial-gradient(circle at 30% 25%, #fff0a8, #d4a72c 60%, #7a5a0a);
+    }
+
+    .tier-platinum {
+        background: radial-gradient(circle at 30% 25%, #f0f7ff, #a3b3c6 60%, #566274);
+    }
+
+    .tier-diamond {
+        background: radial-gradient(circle at 30% 25%, #e6fbff, #52b3d8 60%, #1b516f);
+    }
+</style>

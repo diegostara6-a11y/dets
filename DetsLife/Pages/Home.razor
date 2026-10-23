@@ -5,7 +5,6 @@
 @inject HistoryService History
 @inject NavigationManager Nav
 
-
 <div class="Root"
      @onpointerdown="OnPointerDown"
      @onpointerup="OnPointerUp"
@@ -13,6 +12,10 @@
 
     <header class="header">
         <h2>Punteggio Vita</h2>
+        <div class="Dots">
+            <span class="Dot on"></span>
+            <span class="Dot"></span>
+        </div>
     </header>
 
     <div class="InfoBox @GetBackgroundColor(points)">
@@ -33,173 +36,23 @@
     </div>
 </div>
 
-
-
 @code {
-    private const string FinanceIcon =
-   "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>" +
-   "<path d='M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4'/>" +
-   "<path d='M0 4a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm3 0a2 2 0 0 1-2 2v4a2 2 0 0 1 2 2h10a2 2 0 0 1 2-2V6a2 2 0 0 1-2-2z'/>" +
-   "</svg>";
-
-    private const string TimelineIcon =
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>" +
-        "<path d='M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z'/>" +
-        "</svg>";
-
-    private const string CalendarIcon =
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>" +
-        "<path d='M6.445 11.688V6.354h-.633A13 13 0 0 0 4.5 7.16v.695c.375-.257.969-.62 1.258-.777h.012v4.61zm1.188-1.305c.047.64.594 1.406 1.703 1.406 1.258 0 2-1.066 2-2.871 0-1.934-.781-2.668-1.953-2.668-.926 0-1.797.672-1.797 1.809 0 1.16.824 1.77 1.676 1.77.746 0 1.23-.376 1.383-.79h.027c-.004 1.316-.461 2.164-1.305 2.164-.664 0-1.008-.45-1.05-.82zm2.953-2.317c0 .696-.559 1.18-1.184 1.18-.601 0-1.144-.383-1.144-1.2 0-.823.582-1.21 1.168-1.21.633 0 1.16.398 1.16 1.23'/>" +
-        "<path d='M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z'/>" +
-        "</svg>";
     private int points;
-    private int GoalPoint;
-    private int page;               // 0 = azioni, 1 = obiettivi
     private double? startX;
     private double startY;
-    private bool GoalPopUpVisible = false;
-    private bool showPrize;
-    private HabitAction? randomAction;
 
-    private int NextPrizeDist => 10 - GoalPoint % 10;
+    private readonly List<HabitAction> actions = HabitCatalog.Actions;
 
-    private int ActiveIndex
+    protected override async Task OnInitializedAsync()
     {
-        get
-        {
-            var path = Nav.ToBaseRelativePath(Nav.Uri)
-                          .Split('?')[0]
-                          .Trim('/')
-                          .ToLowerInvariant();
-
-            return path switch
-            {
-                "finances" => 0,
-                "timeline" => 1,
-                "calendar" => 2,
-                _ => 0
-            };
-        }
+        points = await SavingService.LoadAsync<int>("points");
     }
-
-    private void GoTo(string route)
-    {
-        var current = Nav.ToBaseRelativePath(Nav.Uri)
-                         .Split('?')[0]
-                         .Trim('/');
-
-        if (!string.Equals(current, route, StringComparison.OrdinalIgnoreCase))
-            Nav.NavigateTo(route);
-    }
-
-
-    private async Task Apply(GoalAction goalAction)
-    {
-        int before = GoalPoint;
-        GoalPoint += goalAction.Value;
-        await SavingService.SaveAsync("goalpoints", GoalPoint);
-
-        if (GoalPoint / 10 > before / 10)   // ha superato una decina
-        {
-            PickRandomReward();
-            showPrize = true;
-        }
-    }
-
-    private void PickRandomReward()
-    {
-        var rewards = actions.Where(a => a.Value < 0 && a.Weight > 0).ToList();
-
-        if (rewards.Count == 0)
-        {
-            randomAction = new HabitAction { Name = "Nessuna ricompensa", Value = 0 };
-            return;
-        }
-
-        double total = rewards.Sum(r => r.Weight);
-        double roll = Random.Shared.NextDouble() * total;
-
-        foreach (var r in rewards)
-        {
-            roll -= r.Weight;
-            if (roll < 0)
-            {
-                randomAction = r;
-                return;
-            }
-        }
-
-        randomAction = rewards[^1];   // salvaguardia per errori di arrotondamento
-    }
-
-    private void ClosePrize() => showPrize = false;
-
-
-    private readonly List<HabitAction> actions = new()
-    {
-
-                /*Cose negative*/
-        new() { Name = "Videogiochi", Description = "Giocare per più di 2 ore", Value = -15, Weight = 4 },
-        new() { Name = "Scroll infinito", Description = "Più di un'ora sui social senza uno scopo", Value = -25, Weight = 3 },
-        new() { Name = "Salto palestra", Description = "Saltare un allenamento programmato", Value = -20, Weight = 2 },
-        new() { Name = "Acquisto impulsivo", Description = "Comprare qualcosa di non necessario", Value = -25, Weight = 1 },
-        new() { Name = "Pasto fuori casa", Description = "Mangiare fuori con spesa minima di 5€", Value = -5, Weight = 5 },
-        new() { Name = "Terea", Description = "Comprare un pacchetto di terea", Value = -55, Weight = 3 },
-        new() { Name = "Sigarette", Description = "Comprare un pacchetto di sigarette", Value = -75, Weight = 2 },
-        new() { Name = "Serate con alcol", Description = "Uscite di sera dove si beve con amici", Value = -35, Weight = 5 },
-
-                /*Cose positive*/
-        new() { Name = "Palestra", Description = "Andare in palestra per almeno 1 ora", Value = 10, Weight = 0 },
-        new() { Name = "Studiare", Description = "Studiare per almeno 1.5 ore", Value = 15, Weight = 0 },
-        new() { Name = "Leggere un libro", Description = "Leggere per almeno 15 minuti", Value = 10, Weight = 0 },
-        new() { Name = "Niente social", Description = "Usare i social per meno di 120 minuti", Value = 12, Weight = 0 },
-        new() { Name = "Riordinare", Description = "Mettere in ordine camera o scrivania", Value = 5, Weight = 0 },
-        new() { Name = "Aiuto in casa", Description = "Fare una faccenda senza che te la chiedano", Value = 5, Weight = 0 },
-        new() { Name = "Tempo con la famiglia", Description = "Cenare o passare del tempo con i genitori o i fratelli", Value = 5, Weight = 0 },        new() { Name = "Strumento musicale", Description = "Suonare o esercitarsi per almeno 20 minuti", Value = 8, Weight = 0 },
-        new() { Name = "Progetto personale", Description = "Lavorare per 1.5 ore a un progetto tuo (app, disegno, video, scrittura)", Value = 15, Weight = 0 },
-       
-       
-    };
-
-    private List<GoalAction> goal = new()
-    {
-        new() { Name = "9 o 10", Description = "Prendere 9 o 10 in una materia scientifica", Value = 5 },
-        new() { Name = "7 o 8", Description = "Prendere 7 o 8 in una materia scientifica", Value = 3 },
-        new() { Name = "Entrare al POLITO", Description = "Entrare al POLITO", Value = 10 },
-    };
-
-
 
     private async Task Apply(HabitAction action)
     {
         points += action.Value;
         await SavingService.SaveAsync("points", points);
         await History.AddAsync(action.Name, action.Value);
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        await SavingService.DeleteAsync("goals");
-        points = await SavingService.LoadAsync<int>("points");
-        GoalPoint = await SavingService.LoadAsync<int>("goalpoints");
-
-        var saved = await SavingService.LoadAsync<List<GoalAction>>("goals");
-        if (saved is not null)
-            goal = saved;
-        await SavingService.DeleteAsync("goals");
-    }
-
-    private void AddGoal()
-    {
-        GoalPopUpVisible = true;
-    }
-
-    private async Task ClearGoals()
-    {
-        GoalPoint = 0;
-
-        await SavingService.SaveAsync("goalpoints", GoalPoint);
-        await SavingService.DeleteAsync("goals");
     }
 
     private string GetBackgroundColor(int value)
@@ -209,18 +62,6 @@
         if (value < 25) return "blue";
         return "gold";
     }
-
-
-    private string GetBackgroundColorGoal(int GoalPoint)
-    {
-        if (GoalPoint < 25) return "goal-bronze";
-        if (GoalPoint < 75) return "goal-silver";
-        if (GoalPoint < 150) return "goal-gold";
-        if (GoalPoint < 300) return "goal-platinum";
-        return "goal-diamond";
-    }
-
-    private string TrackStyle => $"transform: translateX({-page * 100}%);";
 
     private void OnPointerDown(PointerEventArgs e)
     {
@@ -232,7 +73,6 @@
     {
         startX = null;
     }
-
 
     private void OnPointerUp(PointerEventArgs e)
     {
@@ -246,57 +86,9 @@
         if (Math.Abs(dx) < 60 || Math.Abs(dy) > Math.Abs(dx))
             return;
 
-        // Swipe verso sinistra: apri Goals
+        // Swipe verso sinistra: vai agli obiettivi
         if (dx < 0)
             Nav.NavigateTo("/goals");
-    }
-
-
-    private string name = "";
-    private int value;
-
-    private async Task Confirm()
-    {
-        if (string.IsNullOrWhiteSpace(name)) return;
-
-        goal.Add(new GoalAction
-        {
-            Name = name,
-            Value = Math.Clamp(value, 1, 5)   // limita a 1-5 come dice il placeholder
-        });
-
-        await SavingService.SaveAsync("goals", goal);
-
-        name = "";
-        value = 0;
-        GoalPopUpVisible = false;
-    }
-
-    private void Cancel()
-    {
-        GoalPopUpVisible = false;
-    }
-
-    private GoalAction? goalToDelete;
-
-    private void AskDelete(GoalAction g)
-    {
-        goalToDelete = g;
-    }
-
-    private void CancelDelete()
-    {
-        goalToDelete = null;
-    }
-
-    private async Task ConfirmDelete()
-    {
-        if (goalToDelete is null) return;
-
-        goal.Remove(goalToDelete);
-        await SavingService.SaveAsync("goals", goal);   // aggiorna anche il file su disco
-
-        goalToDelete = null;
     }
 }
 
@@ -309,14 +101,14 @@
     }
 
     .Root {
-        min-height: 100vh; /* lo swipe funziona anche sotto i bottoni */
-        touch-action: pan-y; /* scroll verticale al browser, orizzontale a noi */
+        min-height: 100vh;
+        touch-action: pan-y;
         user-select: none;
-        -webkit-user-select: none; /* niente testo evidenziato trascinando */
+        -webkit-user-select: none;
     }
 
     .header {
-        position: sticky; /* la barra nera resta fissa in alto */
+        position: sticky;
         top: 0;
         z-index: 10;
         margin: 0;
@@ -345,12 +137,6 @@
             background: white;
         }
 
-    .Pager {
-        width: 100%;
-        overflow: hidden;
-    }
-
-    /* Info Box */
     .InfoBox {
         box-sizing: border-box;
         width: 100%;
@@ -387,20 +173,11 @@
         background: linear-gradient(135deg, #fcd34d, #b8860b);
     }
 
-    .InfoPng {
-        width: 120px; /* ora puoi farla più grande */
-        height: 120px;
-        object-fit: contain;
-        opacity: 0.9;
-        mix-blend-mode: multiply;
-    }
-
-    /* Action Buttons */
     .ActionGrid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 12px;
-        padding: 16px 12px;
+        padding: 16px 12px 90px; /* spazio per il footer fisso */
     }
 
     .ActionButton {
@@ -420,25 +197,6 @@
         transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
         -webkit-tap-highlight-color: transparent;
         background: linear-gradient(135deg, grey, #5C5B5B);
-    }
-
-    .ActionButtonClean {
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-        min-height: 120px;
-        padding: 14px;
-        border: none;
-        border-radius: 18px;
-        color: white;
-        text-align: left;
-        cursor: pointer;
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-        transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-        -webkit-tap-highlight-color: transparent;
-        background: red;
     }
 
         .ActionButton.positive {
@@ -464,12 +222,6 @@
         font-weight: 700;
     }
 
-    .ActionDesc {
-        font-size: 0.75rem;
-        opacity: 0.85;
-        line-height: 1.25;
-    }
-
     .ActionValue {
         margin-top: auto;
         align-self: flex-end;
@@ -478,123 +230,6 @@
         background: rgba(255, 255, 255, 0.25);
         font-weight: 700;
         font-size: 1.1rem;
-    }
-
-    .GoalGrid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        padding: 16px 12px;
-    }
-
-    .Pager {
-        width: 100%;
-        overflow: hidden;
-        touch-action: pan-y; /* lo scroll verticale resta del browser, quello orizzontale arriva a noi */
-        -webkit-user-select: none;
-    }
-
-    .Track {
-        display: flex;
-        transition: transform 0.3s ease;
-    }
-
-    .Page {
-        flex: 0 0 100%;
-        min-width: 0;
-    }
-
-    .PopupBackdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.6);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
-    }
-
-    .PopupBox {
-        width: 85%;
-        max-width: 380px;
-        padding: 20px;
-        border-radius: 20px;
-        background: #1f2937;
-        color: white;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-        .PopupBox h3 {
-            margin: 0;
-        }
-
-    .PopupInput {
-        padding: 12px;
-        border: none;
-        border-radius: 10px;
-        font-size: 1rem;
-    }
-
-    .PopupButtons {
-        display: flex;
-        gap: 10px;
-    }
-
-    .PopupBtn {
-        flex: 1;
-        padding: 12px;
-        border: none;
-        border-radius: 10px;
-        font-size: 1rem;
-        color: white;
-    }
-
-        .PopupBtn.cancel {
-            background: #4b5563;
-        }
-
-        .PopupBtn.ok {
-            background: #16a34a;
-        }
-
-    .GoalItem {
-        position: relative;
-    }
-
-        .GoalItem .ActionButton {
-            width: 100%;
-        }
-
-    .DeleteBtn {
-        position: absolute;
-        top: 6px;
-        right: 6px;
-        width: 28px;
-        height: 28px;
-        border: none;
-        border-radius: 50%;
-        background: rgba(0, 0, 0, 0.35);
-        color: white;
-        font-size: 0.9rem;
-        line-height: 1;
-        cursor: pointer;
-    }
-
-        .DeleteBtn:active {
-            background: rgba(0, 0, 0, 0.6);
-        }
-
-    .PopupBtn.danger {
-        background: #dc2626;
-    }
-
-    footer {
-        position: fixed;
-        bottom: 0;
-        width: 100%;
-        background: black;
     }
 
     footer {
@@ -624,33 +259,4 @@
             padding: 6px 12px;
             font-size: 1rem;
         }
-
-
-    /*Goal box background*/
-    /* Base condivisa da tutte le classi (grana + blend + colore testo) */
-    .goal-bronze, .goal-silver, .goal-gold, .goal-platinum, .goal-diamond {
-        --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.004 0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.5 0 0 0 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-        background-blend-mode: normal, normal, normal, overlay;
-        color: white;
-    }
-
-    .goal-bronze {
-        background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.80) 100%), radial-gradient(ellipse 35% 30% at 0% 0%, rgba(255,230,200,0.50) 0%, rgba(255,230,200,0.16) 50%, rgba(255,230,200,0) 100%), linear-gradient(90deg, #6b4423 0%, #4a2d14 20%, #8a5a30 38%, #46280f 52%, #9a6a3a 64%, #5a3719 78%, #7a4e28 100%), var(--grain);
-    }
-
-    .goal-silver {
-        background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.80) 100%), radial-gradient(ellipse 35% 30% at 0% 0%, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0) 100%), linear-gradient(90deg, #8d9298 0%, #6a6f75 20%, #a4a9ae 38%, #666a70 52%, #b0b4b9 64%, #7b8086 78%, #999ea3 100%), var(--grain);
-    }
-
-    .goal-gold {
-        background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.80) 100%), radial-gradient(ellipse 35% 30% at 0% 0%, rgba(255,245,200,0.60) 0%, rgba(255,245,200,0.20) 50%, rgba(255,245,200,0) 100%), linear-gradient(90deg, #9a7b1c 0%, #6e550e 20%, #b8962e 38%, #6a500c 52%, #c9a640 64%, #84660f 78%, #a88a24 100%), var(--grain);
-    }
-
-    .goal-platinum {
-        background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.80) 100%), radial-gradient(ellipse 35% 30% at 0% 0%, rgba(235,245,255,0.65) 0%, rgba(235,245,255,0.22) 50%, rgba(235,245,255,0) 100%), linear-gradient(90deg, #7d8a9a 0%, #5a6573 20%, #9aa7b6 38%, #55606e 52%, #a9b5c3 64%, #6a7685 78%, #8d9aa9 100%), var(--grain);
-    }
-
-    .goal-diamond {
-        background: linear-gradient(180deg, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.75) 100%), radial-gradient(ellipse 35% 30% at 0% 0%, rgba(220,250,255,0.75) 0%, rgba(220,250,255,0.28) 50%, rgba(220,250,255,0) 100%), linear-gradient(90deg, #2f7fa8 0%, #1d5877 20%, #4aa0c8 38%, #1b516f 52%, #6bbcdc 64%, #2a6f94 78%, #3f92b9 100%), var(--grain);
-    }
 </style>

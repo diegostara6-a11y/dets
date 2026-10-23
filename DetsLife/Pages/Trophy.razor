@@ -1,0 +1,288 @@
+﻿@using global::DetsLife 
+@page "/trophy"
+@inject TrophyService Trophies
+
+<div class="Root">
+
+<header class="header">
+    <h2>Trofei</h2>
+    <span class="Summary">@earnedCount / @trophies.Count ottenuti</span>
+</header>
+
+@if (loadError is not null)
+{
+    <div class="ErrorMessage">
+        <p>Impossibile caricare i trofei.</p>
+        <pre>@loadError</pre>
+    </div>
+}
+else if (isLoading)
+{
+    <p class="Loading">Caricamento trofei...</p>
+}
+else
+{
+    <div class="TrophyGrid">
+        @foreach (var t in trophies)
+        {
+            <div class="Trophy @(t.IsEarned ? "" : "locked")" @key="t.Id">
+                <div class="Medal tier-@t.Tier.ToString().ToLowerInvariant()">
+                    <span class="MedalIcon">@t.Icon</span>
+                </div>
+
+                <span class="TrophyName">@t.Name</span>
+                <span class="TrophyDesc">@t.Description</span>
+
+                <span class="TrophyCount">
+                    @if (t.IsEarned)
+                    {
+                        @($"Ottenuto {t.TimesEarned} {(t.TimesEarned == 1 ? "volta" : "volte")}")
+                    }
+                    else
+                    {
+                        @("Non ancora ottenuto")
+                    }
+                </span>
+
+                <div class="Bar">
+                    <div style="@($"width:{Percent(t)}%")"></div>
+                </div>
+
+                <span class="BarLabel">@Progress(t) / @t.Target</span>
+            </div>
+        }
+    </div>
+}
+
+
+</div>
+
+@code { private List<global::DetsLife.Trophy> trophies = new(); private Stats? stats;
+
+private bool isLoading = true;
+private string? loadError;
+
+private int earnedCount => trophies.Count(t => t.IsEarned);
+
+protected override async Task OnInitializedAsync()
+{
+    try
+    {
+        await Trophies.CheckAsync();
+
+        var data = await Trophies.GetDataAsync();
+
+        trophies = data?.Trophies
+            ?? new List<global::DetsLife.Trophy>();
+
+        stats = await Trophies.GetStatsAsync();
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Errore caricamento trofei: {ex}");
+        loadError = $"{ex.GetType().Name}: {ex.Message}";
+    }
+    finally
+    {
+        isLoading = false;
+    }
+}
+
+private int Progress(global::DetsLife.Trophy t)
+{
+    try
+    {
+        if (stats is null || t.Target <= 0)
+            return 0;
+
+        return Math.Clamp(
+            TrophyRules.Progress(t, stats),
+            0,
+            t.Target);
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Errore progresso trofeo '{t.Name}': {ex}");
+        return 0;
+    }
+}
+
+private int Percent(global::DetsLife.Trophy t)
+{
+    try
+    {
+        if (stats is null || t.Target <= 0)
+            return 0;
+
+        var percent = TrophyRules.Percent(t, stats) * 100;
+
+        if (double.IsNaN(percent) || double.IsInfinity(percent))
+            return 0;
+
+        return (int)Math.Clamp(Math.Round(percent), 0, 100);
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Errore percentuale trofeo '{t.Name}': {ex}");
+        return 0;
+    }
+}
+
+
+}
+
+<style>
+html, body {
+background-color: black;
+margin: 0;
+padding: 0;
+overflow-x: hidden;
+}
+
+.Root {
+min-height: 100vh;
+color: white;
+}
+
+.header {
+position: sticky;
+top: 0;
+z-index: 10;
+margin: 0;
+padding: 12px 0 8px;
+text-align: center;
+color: white;
+background: #0b0b14;
+letter-spacing: 1px;
+}
+
+.header h2 {
+margin: 0;
+}
+
+.Summary {
+font-size: 0.8rem;
+opacity: 0.7;
+}
+
+.TrophyGrid {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 14px;
+padding: 20px 12px 110px;
+}
+
+.Trophy {
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 6px;
+padding: 18px 10px 14px;
+border-radius: 18px;
+background: #14141c;
+text-align: center;
+transition: filter 0.3s ease, opacity 0.3s ease;
+}
+
+.Medal {
+width: 84px;
+height: 84px;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+box-shadow: inset 0 0 0 4px rgba(255,255,255,0.28), 0 6px 14px rgba(0,0,0,0.45);
+margin-bottom: 6px;
+}
+
+.MedalIcon {
+font-size: 2.3rem;
+filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+}
+
+.TrophyName {
+font-weight: 700;
+font-size: 1rem;
+}
+
+.TrophyDesc {
+font-size: 0.75rem;
+opacity: 0.75;
+line-height: 1.25;
+}
+
+.TrophyCount {
+margin-top: 4px;
+font-size: 0.8rem;
+font-weight: 600;
+}
+
+.Bar {
+width: 100%;
+height: 6px;
+margin-top: 4px;
+border-radius: 3px;
+background: rgba(255,255,255,0.15);
+overflow: hidden;
+}
+
+.Bar > div {
+height: 100%;
+border-radius: 3px;
+background: white;
+transition: width 0.4s ease;
+}
+
+.BarLabel {
+font-size: 0.7rem;
+opacity: 0.6;
+}
+
+.Trophy.locked .Medal,
+.Trophy.locked .MedalIcon {
+filter: grayscale(1);
+opacity: 0.45;
+}
+
+.Trophy.locked .TrophyName {
+opacity: 0.6;
+}
+
+.tier-bronze {
+background: radial-gradient(circle at 30% 25%, #e8b182, #8a5a30 60%, #4a2d14);
+}
+
+.tier-silver {
+background: radial-gradient(circle at 30% 25%, #f2f4f6, #9aa0a6 60%, #5b6066);
+}
+
+.tier-gold {
+background: radial-gradient(circle at 30% 25%, #fff0a8, #d4a72c 60%, #7a5a0a);
+}
+
+.tier-platinum {
+background: radial-gradient(circle at 30% 25%, #f0f7ff, #a3b3c6 60%, #566274);
+}
+
+.tier-diamond {
+background: radial-gradient(circle at 30% 25%, #e6fbff, #52b3d8 60%, #1b516f);
+}
+
+.ErrorMessage {
+padding: 20px;
+color: #ff7777;
+overflow-wrap: anywhere;
+}
+
+.ErrorMessage pre {
+white-space: pre-wrap;
+font-size: 0.8rem;
+}
+
+.Loading {
+padding: 20px;
+text-align: center;
+color: white;
+opacity: 0.7;
+}
+</style>
