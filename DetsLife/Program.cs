@@ -12,6 +12,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 builder.Services.AddSingleton<ISavingService, SaveOnDevice>();
 builder.Services.AddSingleton<HistoryService>();
 builder.Services.AddScoped<GoogleCalendarService>();
+builder.Services.AddScoped<TrophyService>();
 
 var host = builder.Build();
 var js = host.Services.GetRequiredService<Microsoft.JSInterop.IJSRuntime>();

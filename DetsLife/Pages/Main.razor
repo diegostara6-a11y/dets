@@ -3,6 +3,7 @@
 @inject HistoryService History
 @inject ISavingService SavingService
 @inject HistoryService History
+@inject TrophyService Trophies
 @using Microsoft.AspNetCore.Components.Web
 @using Dets.Models
 @using Dets.Services
@@ -319,7 +320,8 @@
         points += value;
         await SavingService.SaveAsync("points", points);
         await History.AddAsync(name, value);
-        entries = await History.GetRecentAsync();   // aggiorna la lista dei pulsanti
+        await Trophies.RecordAsync(name, value, points);   // <-- NUOVA
+        entries = await History.GetRecentAsync();
     }
 
     private string BgStyle(string name)

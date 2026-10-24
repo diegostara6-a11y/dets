@@ -11,6 +11,9 @@ public class TrophyService
 
     public TrophyService(ISavingService saving) => _saving = saving;
 
+    /// <summary>Scatta quando compaiono nuovi avvisi "trofeo ottenuto" (usato dall'animazione globale).</summary>
+    public event Action? AlertsChanged;
+
     // ---------- Dati ----------
 
     public async Task<TrophyData> GetDataAsync()
@@ -23,9 +26,14 @@ public class TrophyService
         {
             _data = new TrophyData
             {
-                Trophies = TrophyCatalog.Defaults(),
+                Trophies = DefaultTrophies.Create(),
                 StartDate = DateTime.Today
             };
+            await SaveAsync();
+        }
+        else if (DefaultTrophies.EnsureDefaults(_data))
+        {
+            // aggiunge i trofei nuovi mancanti senza toccare quelli già salvati
             await SaveAsync();
         }
 
@@ -53,10 +61,6 @@ public class TrophyService
 
     // ---------- Controllo trofei ----------
 
-    /// <summary>
-    /// Controlla se qualche trofeo è stato completato (serve anche solo per il passare del tempo,
-    /// es. "30 giorni senza sigarette"). Si può chiamare quando si aprono le pagine.
-    /// </summary>
     public async Task CheckAsync()
     {
         var d = await GetDataAsync();
@@ -67,6 +71,7 @@ public class TrophyService
     {
         var stats = BuildStats(d);
         bool changed = forceSave;
+        bool newAlerts = false;
 
         foreach (var t in d.Trophies)
         {
@@ -88,16 +93,19 @@ public class TrophyService
                 {
                     Name = t.Name,
                     Icon = t.Icon,
-                    Tier = t.Tier,
+                    BadgeFile = t.BadgeFile,
+                    Tier = t.CurrentTier,      // calcolato DOPO l'incremento di TimesEarned
                     TimesEarned = t.TimesEarned,
                     At = DateTime.Now
                 });
 
                 changed = true;
+                newAlerts = true;
             }
         }
 
         if (changed) await SaveAsync();
+        if (newAlerts) AlertsChanged?.Invoke();
     }
 
     // ---------- Statistiche ----------
@@ -108,8 +116,6 @@ public class TrophyService
     {
         var today = DateTime.Today;
 
-        // Streak: giorni consecutivi con punteggio del giorno > 0.
-        // Se oggi non hai ancora fatto nulla, la serie non è interrotta: si parte da ieri.
         var day = today;
         if (!d.DailyPoints.ContainsKey(DayKey(day)))
             day = day.AddDays(-1);
@@ -121,8 +127,6 @@ public class TrophyService
             day = day.AddDays(-1);
         }
 
-        // Giorni dall'ultima volta che hai fatto ogni azione
-        // (se non l'hai mai fatta: dal primo giorno in cui hai usato i trofei)
         var since = new Dictionary<string, int>();
         foreach (var a in HabitCatalog.Actions)
         {

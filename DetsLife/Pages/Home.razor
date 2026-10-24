@@ -2,6 +2,7 @@
 @using global::DetsLife
 @page "/home"
 @inject ISavingService SavingService
+@inject TrophyService Trophies
 @inject HistoryService History
 @inject NavigationManager Nav
 
@@ -53,6 +54,7 @@
         points += action.Value;
         await SavingService.SaveAsync("points", points);
         await History.AddAsync(action.Name, action.Value);
+        await Trophies.RecordAsync(action.Name, action.Value, points);
     }
 
     private string GetBackgroundColor(int value)
